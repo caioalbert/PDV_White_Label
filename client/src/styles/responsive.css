@@ -1,0 +1,502 @@
+/* ============================================
+   RESPONSIVE BREAKPOINTS
+   ============================================ */
+
+/* ---- Tablet: Collapsed sidebar ---- */
+@media (max-width: 1024px) {
+  .login-shell {
+    grid-template-columns: minmax(420px, 58%) minmax(0, 42%);
+  }
+
+  .login-form-panel {
+    padding-right: 48px;
+    padding-left: 48px;
+  }
+
+  .login-visual-content {
+    right: 32px;
+    bottom: 64px;
+    left: 32px;
+  }
+
+  .login-visual-content h2 {
+    font-size: 2.25rem;
+  }
+
+  .login-visual-content p {
+    font-size: 0.95rem;
+  }
+
+  .sidebar {
+    width: var(--sidebar-collapsed);
+  }
+
+  .sidebar-logo img {
+    width: 38px;
+    height: 38px;
+  }
+
+  .sidebar-text,
+  .sidebar-section-label,
+  .sidebar-user-info {
+    display: none;
+  }
+
+  .sidebar-item {
+    justify-content: center;
+    padding: 12px;
+    gap: 0;
+  }
+
+  .sidebar-user {
+    justify-content: center;
+    padding: var(--space-sm);
+  }
+
+  .sidebar-logout {
+    display: none;
+  }
+
+  .main-area {
+    margin-left: var(--sidebar-collapsed);
+  }
+
+  .pdv-layout {
+    grid-template-columns: minmax(0, 1fr) 390px;
+  }
+
+  .pdv-context-chip {
+    font-size: 0.72rem;
+  }
+
+  .pdv-product-item {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+  }
+
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dashboard-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-md);
+  }
+
+  .dashboard-stats .stat-card {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+  }
+
+  .dashboard-stats .stat-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-bottom: 0;
+  }
+
+  .dashboard-stats .stat-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .dashboard-stats .stat-value {
+    font-size: 1.35rem;
+  }
+
+  .dashboard-chart-body {
+    height: 16.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Mobile: Off-canvas sidebar ---- */
+@media (max-width: 768px) {
+  .login-shell {
+    display: block;
+    min-height: 100dvh;
+  }
+
+  .login-form-panel {
+    min-height: 100dvh;
+    padding: 32px 24px;
+  }
+
+  .login-form-wrap {
+    max-width: 460px;
+  }
+
+  .login-brand {
+    margin-bottom: 44px;
+  }
+
+  .login-visual-panel {
+    display: none;
+  }
+
+  .sidebar {
+    transform: translateX(-100%);
+    position: fixed;
+    z-index: var(--z-drawer);
+    width: 280px;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Restore hidden elements when sidebar opens on mobile */
+  .sidebar.open .sidebar-text,
+  .sidebar.open .sidebar-section-label,
+  .sidebar.open .sidebar-user-info,
+  .sidebar.open .sidebar-logout {
+    display: block;
+  }
+
+  .sidebar.open .sidebar-item {
+    justify-content: flex-start;
+    padding: 11px 16px;
+    gap: 12px;
+  }
+
+  .sidebar.open .sidebar-user {
+    justify-content: flex-start;
+    padding: var(--space-md) var(--space-lg);
+  }
+
+  .sidebar.open .sidebar-logo img {
+    width: 72px;
+    height: 72px;
+  }
+
+  .sidebar-overlay.active {
+    display: block;
+  }
+
+  .main-area {
+    margin-left: 0;
+  }
+
+  .header {
+    padding: 0 var(--space-md);
+  }
+
+  .hamburger {
+    display: flex;
+  }
+
+  .content {
+    padding: var(--space-md);
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-chart-body {
+    height: 15rem;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-composition-entry {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .product-composition-entry .btn {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .composition-add-row {
+    grid-template-columns: 1fr;
+  }
+
+  .composition-add-row .btn {
+    width: 100%;
+  }
+
+  .purchase-product-empty,
+  .purchase-quick-product-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .purchase-product-empty .btn,
+  .purchase-quick-product-actions .btn {
+    width: 100%;
+  }
+
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .pdv-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+
+  .vendas-page {
+    height: auto;
+    min-height: 0;
+    display: block;
+    overflow: visible;
+  }
+
+  .pdv-screen {
+    height: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .pdv-operation-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pdv-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .pdv-products {
+    min-height: 420px;
+    max-height: 65vh;
+  }
+
+  .pdv-cart {
+    min-height: 520px;
+    height: auto;
+  }
+
+  .pdv-cart-footer {
+    overflow: visible;
+  }
+
+  .pdv-cart-items {
+    min-height: 160px;
+    max-height: 45vh;
+  }
+
+  .pdv-shortcuts {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .modal {
+    width: 95%;
+    max-width: none;
+    margin: var(--space-md);
+  }
+
+  .search-bar {
+    flex-direction: column;
+  }
+
+  .search-input-wrapper {
+    min-width: 100%;
+  }
+
+  .header-store-select {
+    max-width: 120px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tabs {
+    gap: 0;
+  }
+
+  .tab {
+    padding: 10px 14px;
+    font-size: 0.8rem;
+  }
+
+  .toast {
+    min-width: auto;
+    max-width: calc(100vw - 40px);
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+  }
+
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-methods {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pdv-customer-summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .pdv-customer-copy {
+    min-width: 180px;
+  }
+
+  .reports-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .report-menu {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: var(--space-sm);
+  }
+
+  .report-menu-item {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cash-status {
+    grid-template-columns: 1fr;
+  }
+
+  .cash-live-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sale-details-total {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+}
+
+/* ---- Small mobile ---- */
+@media (max-width: 480px) {
+  .login-form-panel {
+    align-items: flex-start;
+    padding: 24px 20px;
+  }
+
+  .login-brand {
+    margin-bottom: 36px;
+  }
+
+  .login-brand img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .login-heading h1 {
+    font-size: 1.7rem;
+  }
+
+  .login-test-credentials p {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .login-test-credentials code {
+    text-align: left;
+  }
+
+  .stat-card .stat-value {
+    font-size: 1.4rem;
+  }
+
+  .dashboard-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .page-title {
+    font-size: 1.25rem;
+  }
+
+  .btn {
+    padding: 8px 16px;
+    font-size: 0.8rem;
+  }
+
+  .pdv-customer-not-found {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pdv-customer-not-found .btn {
+    width: 100%;
+  }
+
+  .pdv-product-item {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .pdv-product-sale {
+    grid-column: 2;
+    align-items: stretch;
+    min-width: 0;
+  }
+
+  .pdv-product-add-controls {
+    grid-template-columns: minmax(64px, 0.4fr) minmax(100px, 1fr);
+  }
+
+  .pdv-product-quantity input {
+    width: 100%;
+  }
+
+  .pdv-product-add-controls .btn {
+    min-width: 100px;
+  }
+
+  .pdv-main-search input {
+    font-size: 0.85rem;
+  }
+
+  .pdv-card-detail,
+  .pdv-cash-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-modal-summary,
+  .payment-entry-fields,
+  .sale-payment-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-preview {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

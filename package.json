@@ -1,0 +1,25 @@
+{
+  "name": "pdv-carlos",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=pdv-carlos-client",
+    "test": "npm run test --workspace=pdv-carlos-server",
+    "test:e2e": "npm run test:e2e --workspace=pdv-carlos-client",
+    "dev:api": "npm run dev --workspace=pdv-carlos-server",
+    "dev:web": "npm run dev --workspace=pdv-carlos-client",
+    "db:migrate": "npm run migrate --workspace=pdv-carlos-server",
+    "db:migrate:status": "npm run migrate:status --workspace=pdv-carlos-server",
+    "db:migrate:rollback": "npm run migrate:rollback --workspace=pdv-carlos-server",
+    "db:bootstrap-admin": "npm run bootstrap:admin --workspace=pdv-carlos-server",
+    "db:import-products": "npm run products:import-client --workspace=pdv-carlos-server"
+  }
+}

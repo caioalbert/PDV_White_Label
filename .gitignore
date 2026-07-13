@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vercel/
+.env
+.env.local
+.env.*.local
+server/.env
+client/.env
+npm-debug.log*
+client/playwright-report/
+client/test-results/

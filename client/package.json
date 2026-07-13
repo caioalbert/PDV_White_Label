@@ -1,0 +1,25 @@
+{
+  "name": "pdv-carlos-client",
+  "version": "1.0.0",
+  "description": "Frontend do ERP Carlos Atacadão do Gesso",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:e2e": "VITE_API_URL=http://127.0.0.1:3101 vite --host 127.0.0.1 --port 5174",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:e2e": "npm --prefix ../server run db:e2e:reset && playwright test",
+    "test:e2e:headed": "npm --prefix ../server run db:e2e:reset && E2E_HEADED=true playwright test --headed --workers=1",
+    "test:e2e:ui": "npm --prefix ../server run db:e2e:reset && playwright test --ui"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "vite": "^8.1.0"
+  }
+}

@@ -1,0 +1,68 @@
+/* ============================================
+   CARLOS ATACADÃO DO GESSO — Design Tokens
+   ============================================ */
+
+:root {
+  /* ---- Brand Colors ---- */
+  --primary:          #1B4332;
+  --primary-light:    #2D6A4F;
+  --primary-lighter:  #40916C;
+  --primary-lightest: #95D5B2;
+
+  /* ---- Semantic Colors ---- */
+  --success: #52B788;
+  --warning: #E9C46A;
+  --error:   #E76F51;
+  --info:    #4FC3F7;
+
+  /* ---- Neutrals ---- */
+  --bg:      #F8F9FA;
+  --bg-dark: #E9ECEF;
+  --card:    #FFFFFF;
+  --border:  #DEE2E6;
+
+  /* ---- Text ---- */
+  --text:           #212529;
+  --text-secondary: #6C757D;
+  --text-light:     #ADB5BD;
+
+  /* ---- Shadows ---- */
+  --shadow-sm:  0 1px 2px  rgba(0, 0, 0, 0.05);
+  --shadow:     0 1px 3px  rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-lg:  0 4px 6px  rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-xl:  0 10px 25px rgba(0, 0, 0, 0.10), 0 6px 10px rgba(0, 0, 0, 0.08);
+
+  /* ---- Radius ---- */
+  --radius-sm:   6px;
+  --radius:      8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-full: 9999px;
+
+  /* ---- Spacing ---- */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* ---- Transitions ---- */
+  --transition-fast: 150ms ease;
+  --transition:      250ms ease;
+  --transition-slow:  400ms ease;
+
+  /* ---- Layout ---- */
+  --sidebar-width:     260px;
+  --sidebar-collapsed:  60px;
+  --header-height:      64px;
+
+  /* ---- Z-index scale ---- */
+  --z-sidebar:  100;
+  --z-header:   100;
+  --z-overlay:  199;
+  --z-drawer:   200;
+  --z-modal:    1000;
+  --z-toast:    2000;
+}
