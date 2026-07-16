@@ -27,13 +27,12 @@ const relatorios = {
   },
   'vendas-loja': {
     titulo: 'Vendas por loja',
-    descricao: 'Comparativo de vendas, ticket médio e produtos vendidos.',
+    descricao: 'Faturamento por loja e produtos vendidos no período.',
     colunas: [
       { key: 'loja', label: 'Unidade' },
       { key: 'quantidade_vendas', label: 'Vendas' },
       { key: 'total', label: 'Faturamento', type: 'currency' },
       { key: 'ticket_medio', label: 'Ticket médio', type: 'currency' },
-      { key: 'produtos_vendidos', label: 'Produtos vendidos', type: 'products', sortable: false },
     ],
   },
   'produtos-mais-vendidos': {
@@ -131,40 +130,29 @@ function formatNumber(value, maximumFractionDigits = 3) {
   return num.toLocaleString('pt-BR', { maximumFractionDigits });
 }
 
-function formatProductsText(value) {
-  const produtos = Array.isArray(value) ? value : [];
-  if (produtos.length === 0) return 'Nenhum produto vendido';
+function getProdutosVendidosAgregados(dados) {
+  const produtosPorId = new Map();
 
-  return produtos.map((produto) => {
-    const quantidade = formatNumber(produto.quantidade_total);
-    const unidade = getUnidadeLabel(produto.unidade);
-    const receita = formatCurrency(produto.receita_total);
-    return `${produto.produto || '-'} (${quantidade} ${unidade}) - ${receita}`;
-  }).join(' | ');
-}
+  dados.forEach((loja) => {
+    const produtos = Array.isArray(loja.produtos_vendidos) ? loja.produtos_vendidos : [];
+    produtos.forEach((produto) => {
+      const chave = `${produto.produto_id || produto.produto}|${produto.unidade || ''}`;
+      const atual = produtosPorId.get(chave) || {
+        produto: produto.produto || '-',
+        unidade: produto.unidade || '',
+        quantidade_total: 0,
+      };
 
-function formatProductsHtml(value) {
-  const produtos = Array.isArray(value) ? value : [];
-  if (produtos.length === 0) {
-    return '<span class="text-muted">Nenhum produto vendido</span>';
-  }
+      atual.quantidade_total += parseFloat(produto.quantidade_total) || 0;
+      produtosPorId.set(chave, atual);
+    });
+  });
 
-  return `
-    <div class="report-products-list">
-      ${produtos.map((produto) => {
-        const quantidade = formatNumber(produto.quantidade_total);
-        const unidade = getUnidadeLabel(produto.unidade);
-        const receita = formatCurrency(produto.receita_total);
-
-        return `
-          <div class="report-product-item">
-            <strong>${escapeHtml(produto.produto || '-')}</strong>
-            <span>${escapeHtml(quantidade)} ${escapeHtml(unidade)} · ${escapeHtml(receita)}</span>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
+  return [...produtosPorId.values()].sort((a, b) => {
+    const diff = b.quantidade_total - a.quantidade_total;
+    if (diff !== 0) return diff;
+    return a.produto.localeCompare(b.produto);
+  });
 }
 
 function formatValue(value, type) {
@@ -173,12 +161,10 @@ function formatValue(value, type) {
   if (type === 'datetime') return formatDateTime(value);
   if (type === 'category') return getCategoriaLabel(value);
   if (type === 'unit') return getUnidadeLabel(value);
-  if (type === 'products') return formatProductsHtml(value);
   return value ?? '-';
 }
 
 function formatCsvValue(value, type) {
-  if (type === 'products') return formatProductsText(value);
   return formatValue(value, type);
 }
 
@@ -189,14 +175,36 @@ function csvValue(value) {
 
 function exportarCsv() {
   const definicao = relatorios[relatorioAtual];
-  const linhas = [
-    definicao.colunas.map((coluna) => csvValue(coluna.label)).join(';'),
-    ...dadosAtuais.map((item) =>
-      definicao.colunas.map((coluna) =>
-        csvValue(formatCsvValue(item[coluna.key], coluna.type))
-      ).join(';')
-    ),
-  ];
+  let linhas;
+
+  if (relatorioAtual === 'vendas-loja') {
+    const produtos = getProdutosVendidosAgregados(dadosAtuais);
+    linhas = [
+      csvValue('Faturamento'),
+      definicao.colunas.map((coluna) => csvValue(coluna.label)).join(';'),
+      ...dadosAtuais.map((item) =>
+        definicao.colunas.map((coluna) =>
+          csvValue(formatCsvValue(item[coluna.key], coluna.type))
+        ).join(';')
+      ),
+      '',
+      csvValue('Produtos vendidos'),
+      [csvValue('Produto'), csvValue('Quantidade')].join(';'),
+      ...produtos.map((produto) => [
+        csvValue(produto.produto),
+        csvValue(`${formatNumber(produto.quantidade_total)} ${getUnidadeLabel(produto.unidade)}`),
+      ].join(';')),
+    ];
+  } else {
+    linhas = [
+      definicao.colunas.map((coluna) => csvValue(coluna.label)).join(';'),
+      ...dadosAtuais.map((item) =>
+        definicao.colunas.map((coluna) =>
+          csvValue(formatCsvValue(item[coluna.key], coluna.type))
+        ).join(';')
+      ),
+    ];
+  }
 
   const blob = new Blob([`\uFEFF${linhas.join('\n')}`], {
     type: 'text/csv;charset=utf-8',
@@ -277,10 +285,89 @@ export async function render(container) {
 
   let table = null;
 
+  function renderVendasLoja(dados) {
+    const tabelaContainer = container.querySelector('#relatorio-tabela');
+    const produtos = getProdutosVendidosAgregados(dados);
+    const totalVendas = dados.reduce(
+      (total, loja) => total + (parseInt(loja.quantidade_vendas, 10) || 0),
+      0
+    );
+    const totalFaturamento = dados.reduce(
+      (total, loja) => total + (parseFloat(loja.total) || 0),
+      0
+    );
+    const ticketMedio = totalVendas > 0 ? totalFaturamento / totalVendas : 0;
+
+    const faturamentoPorLoja = dados.length > 0
+      ? dados.map((loja) => `
+          <div class="report-store-metric">
+            <span>${escapeHtml(loja.loja || '-')}</span>
+            <strong>${escapeHtml(formatCurrency(loja.total))}</strong>
+            <small>${escapeHtml(formatNumber(loja.quantidade_vendas, 0))} venda(s) · Ticket ${escapeHtml(formatCurrency(loja.ticket_medio))}</small>
+          </div>
+        `).join('')
+      : '<p class="text-muted">Nenhuma venda encontrada no período.</p>';
+
+    const produtosRows = produtos.length > 0
+      ? produtos.map((produto) => `
+          <tr>
+            <td>${escapeHtml(produto.produto)}</td>
+            <td>${escapeHtml(formatNumber(produto.quantidade_total))} ${escapeHtml(getUnidadeLabel(produto.unidade))}</td>
+          </tr>
+        `).join('')
+      : '<tr><td colspan="2" class="text-center text-muted" style="padding:24px;">Nenhum produto vendido</td></tr>';
+
+    tabelaContainer.innerHTML = `
+      <div class="report-sales-store-view">
+        <div class="card report-sales-card">
+          <div class="report-card-header">
+            <div>
+              <h3>Faturamento</h3>
+              <p class="text-muted">Resumo financeiro por loja</p>
+            </div>
+            <div class="report-total-billing">
+              <span>Total</span>
+              <strong>${escapeHtml(formatCurrency(totalFaturamento))}</strong>
+              <small>${escapeHtml(formatNumber(totalVendas, 0))} venda(s) · Ticket ${escapeHtml(formatCurrency(ticketMedio))}</small>
+            </div>
+          </div>
+          <div class="report-store-grid">
+            ${faturamentoPorLoja}
+          </div>
+        </div>
+
+        <div class="card report-sales-card">
+          <div class="report-card-header">
+            <div>
+              <h3>Produtos vendidos</h3>
+            </div>
+          </div>
+          <div class="report-products-table-wrap">
+            <table class="data-table report-products-table">
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Quantidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${produtosRows}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function montarTabela() {
     const definicao = relatorios[relatorioAtual];
     const tabelaContainer = container.querySelector('#relatorio-tabela');
     tabelaContainer.innerHTML = '';
+    if (relatorioAtual === 'vendas-loja') {
+      table = null;
+      return;
+    }
     table = createTable(tabelaContainer, {
       columns: definicao.colunas.map((coluna) => ({
         key: coluna.key,
@@ -318,7 +405,11 @@ export async function render(container) {
 
     try {
       dadosAtuais = arrayFrom(await api.get(`/relatorios/${relatorioAtual}?${params}`));
-      table.update(dadosAtuais);
+      if (relatorioAtual === 'vendas-loja') {
+        renderVendasLoja(dadosAtuais);
+      } else {
+        table.update(dadosAtuais);
+      }
       container.querySelector('#btn-exportar-relatorio').disabled = dadosAtuais.length === 0;
       container.querySelector('#relatorio-resumo').innerHTML = `
         <div class="report-result-summary">

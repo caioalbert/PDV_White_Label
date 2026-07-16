@@ -2657,25 +2657,84 @@ kbd {
   font-size: 0.8rem;
 }
 
-.report-products-list {
+.report-sales-store-view {
   display: grid;
-  gap: 6px;
-  min-width: 260px;
+  gap: var(--space-md);
 }
 
-.report-product-item {
+.report-sales-card {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.report-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.report-card-header h3 {
+  margin: 0;
+}
+
+.report-card-header p {
+  margin: 2px 0 0;
+}
+
+.report-total-billing {
   display: grid;
   gap: 2px;
+  min-width: min(190px, 100%);
+  text-align: right;
 }
 
-.report-product-item strong {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.report-product-item span {
+.report-total-billing span,
+.report-total-billing small {
   color: var(--text-secondary);
   font-size: 0.78rem;
+}
+
+.report-total-billing strong {
+  color: var(--primary);
+  font-size: 1.35rem;
+}
+
+.report-store-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--space-sm);
+}
+
+.report-store-metric {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.report-store-metric span,
+.report-store-metric small {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.report-store-metric strong {
+  color: var(--text);
+  font-size: 1.12rem;
+}
+
+.report-products-table-wrap {
+  overflow-x: auto;
+}
+
+.report-products-table th:last-child,
+.report-products-table td:last-child {
+  width: 180px;
+  text-align: right;
 }
 
 .settings-grid {
