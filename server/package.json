@@ -1,7 +1,7 @@
 {
   "name": "pdv-carlos-server",
   "version": "1.0.0",
-  "description": "API do ERP Carlos Atacadão do Gesso",
+  "description": "ERP configur?vel",
   "main": "index.js",
   "type": "module",
   "engines": {

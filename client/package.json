@@ -1,7 +1,7 @@
 {
   "name": "pdv-carlos-client",
   "version": "1.0.0",
-  "description": "Frontend do ERP Carlos Atacadão do Gesso",
+  "description": "ERP configur?vel",
   "type": "module",
   "engines": {
     "node": "24.x"

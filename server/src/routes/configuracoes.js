@@ -10,6 +10,53 @@ import { validatePassword } from '../security/password.js';
 
 const router = Router();
 
+const DEFAULT_COMPANY_NAME = 'Sistema de Gest\u00e3o';
+const CONFIG_DESCRIPTIONS = {
+  nome_empresa: 'Nome da empresa exibido no sistema',
+  desconto_maximo: 'Desconto m\u00e1ximo permitido (%)',
+};
+
+function sanitizeCompanyName(value) {
+  const nome = String(value || '').trim();
+  if (!nome) return null;
+  if (nome.length > 120) return null;
+  return nome;
+}
+
+function sanitizeText(value, maxLength) {
+  const text = String(value ?? '').trim();
+  if (!text || text.length > maxLength) return null;
+  return text;
+}
+
+function parseTaxa(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const taxa = Number(value);
+  if (!Number.isFinite(taxa) || taxa < 0 || taxa > 100) return null;
+  return taxa;
+}
+
+function financialError(res, err, fallback) {
+  if (err.code === '23505') {
+    return res.status(409).json({ error: 'J\u00e1 existe um cadastro com esses dados' });
+  }
+  if (err.code === '23503') {
+    return res.status(400).json({ error: 'A entidade financeira informada n\u00e3o existe' });
+  }
+  return res.status(500).json({ error: fallback });
+}
+
+// GET /api/configuracoes/public
+router.get('/public', async (_req, res) => {
+  try {
+    const config = await db('configuracoes').where({ chave: 'nome_empresa' }).first();
+    res.json({ nome_empresa: config?.valor || DEFAULT_COMPANY_NAME });
+  } catch (err) {
+    console.error('Erro ao carregar configura\u00e7\u00e3o p\u00fablica:', err);
+    res.json({ nome_empresa: DEFAULT_COMPANY_NAME });
+  }
+});
+
 // =================== CONFIGURAÇÕES ===================
 
 // GET /api/configuracoes
@@ -26,8 +73,20 @@ router.get('/', verifyToken, async (req, res) => {
 // PUT /api/configuracoes/:chave
 router.put('/:chave', verifyToken, requireAdmin, async (req, res) => {
   try {
-    const { valor } = req.body;
-    if (['taxa_debito', 'taxa_credito', 'desconto_maximo'].includes(req.params.chave)) {
+    if (!Object.hasOwn(CONFIG_DESCRIPTIONS, req.params.chave)) {
+      return res.status(400).json({ error: 'Configura\u00e7\u00e3o inv\u00e1lida' });
+    }
+
+    let { valor } = req.body;
+    if (req.params.chave === 'nome_empresa') {
+      const nomeEmpresa = sanitizeCompanyName(valor);
+      if (!nomeEmpresa) {
+        return res.status(400).json({ error: 'Informe um nome de empresa com at\u00e9 120 caracteres' });
+      }
+      valor = nomeEmpresa;
+    }
+
+    if (req.params.chave === 'desconto_maximo') {
       const percentual = parseFloat(valor);
       if (!Number.isFinite(percentual) || percentual < 0 || percentual > 100) {
         return res.status(400).json({ error: 'O percentual deve estar entre 0% e 100%' });
@@ -35,15 +94,179 @@ router.put('/:chave', verifyToken, requireAdmin, async (req, res) => {
     }
 
     const [config] = await db('configuracoes')
-      .where({ chave: req.params.chave })
-      .update({ valor })
+      .insert({
+        chave: req.params.chave,
+        valor,
+        descricao: CONFIG_DESCRIPTIONS[req.params.chave],
+      })
+      .onConflict('chave')
+      .merge({ valor })
       .returning('*');
 
-    if (!config) return res.status(404).json({ error: 'Configuração não encontrada' });
     res.json(config);
   } catch (err) {
     console.error('Erro ao atualizar configuração:', err);
     res.status(500).json({ error: 'Erro ao atualizar configuração' });
+  }
+});
+
+// =================== ENTIDADES FINANCEIRAS E TAXAS ===================
+
+// GET /api/configuracoes/entidades-financeiras
+router.get('/entidades-financeiras', verifyToken, requireAdmin, async (_req, res) => {
+  try {
+    const entidades = await db('enteidades_financeiras as ef')
+      .leftJoin('taxas as t', 't.entidade_financeira_codigo', 'ef.codigo')
+      .select('ef.codigo', 'ef.descricao')
+      .count('t.id as quantidade_taxas')
+      .groupBy('ef.codigo', 'ef.descricao')
+      .orderBy('ef.descricao');
+
+    res.json(entidades.map((entidade) => ({
+      ...entidade,
+      quantidade_taxas: Number(entidade.quantidade_taxas) || 0,
+    })));
+  } catch (err) {
+    console.error('Erro ao listar entidades financeiras:', err);
+    financialError(res, err, 'Erro ao listar entidades financeiras');
+  }
+});
+
+// POST /api/configuracoes/entidades-financeiras
+router.post('/entidades-financeiras', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const codigo = sanitizeText(req.body.codigo, 50);
+    const descricao = sanitizeText(req.body.descricao, 255);
+    if (!codigo || !descricao) {
+      return res.status(400).json({ error: 'Informe o c\u00f3digo e a descri\u00e7\u00e3o da entidade financeira' });
+    }
+
+    const [entidade] = await db('enteidades_financeiras')
+      .insert({ codigo, descricao })
+      .returning('*');
+    res.status(201).json({ ...entidade, quantidade_taxas: 0 });
+  } catch (err) {
+    console.error('Erro ao criar entidade financeira:', err);
+    financialError(res, err, 'Erro ao criar entidade financeira');
+  }
+});
+
+// PUT /api/configuracoes/entidades-financeiras/:codigo
+router.put('/entidades-financeiras/:codigo', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const codigoAtual = sanitizeText(req.params.codigo, 50);
+    const codigo = sanitizeText(req.body.codigo, 50);
+    const descricao = sanitizeText(req.body.descricao, 255);
+    if (!codigoAtual || !codigo || !descricao) {
+      return res.status(400).json({ error: 'Informe o c\u00f3digo e a descri\u00e7\u00e3o da entidade financeira' });
+    }
+
+    const [entidade] = await db('enteidades_financeiras')
+      .where({ codigo: codigoAtual })
+      .update({ codigo, descricao })
+      .returning('*');
+    if (!entidade) return res.status(404).json({ error: 'Entidade financeira n\u00e3o encontrada' });
+    res.json(entidade);
+  } catch (err) {
+    console.error('Erro ao atualizar entidade financeira:', err);
+    financialError(res, err, 'Erro ao atualizar entidade financeira');
+  }
+});
+
+// DELETE /api/configuracoes/entidades-financeiras/:codigo
+router.delete('/entidades-financeiras/:codigo', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const deleted = await db('enteidades_financeiras')
+      .where({ codigo: req.params.codigo })
+      .del();
+    if (!deleted) return res.status(404).json({ error: 'Entidade financeira n\u00e3o encontrada' });
+    res.json({ message: 'Entidade financeira removida com sucesso' });
+  } catch (err) {
+    console.error('Erro ao remover entidade financeira:', err);
+    financialError(res, err, 'Erro ao remover entidade financeira');
+  }
+});
+
+// GET /api/configuracoes/entidades-financeiras/:codigo/taxas
+router.get('/entidades-financeiras/:codigo/taxas', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const entidade = await db('enteidades_financeiras').where({ codigo: req.params.codigo }).first();
+    if (!entidade) return res.status(404).json({ error: 'Entidade financeira n\u00e3o encontrada' });
+
+    const taxas = await db('taxas')
+      .where({ entidade_financeira_codigo: req.params.codigo })
+      .orderBy('bandeira');
+    res.json(taxas);
+  } catch (err) {
+    console.error('Erro ao listar taxas:', err);
+    financialError(res, err, 'Erro ao listar taxas');
+  }
+});
+
+// POST /api/configuracoes/entidades-financeiras/:codigo/taxas
+router.post('/entidades-financeiras/:codigo/taxas', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const bandeira = sanitizeText(req.body.bandeira, 100);
+    const taxa = parseTaxa(req.body.taxa);
+    if (!bandeira || taxa === null) {
+      return res.status(400).json({ error: 'Informe a bandeira e uma taxa entre 0% e 100%' });
+    }
+
+    const entidade = await db('enteidades_financeiras').where({ codigo: req.params.codigo }).first();
+    if (!entidade) return res.status(404).json({ error: 'Entidade financeira n\u00e3o encontrada' });
+
+    const [registro] = await db('taxas')
+      .insert({
+        entidade_financeira_codigo: req.params.codigo,
+        bandeira,
+        taxa,
+      })
+      .returning('*');
+    res.status(201).json(registro);
+  } catch (err) {
+    console.error('Erro ao criar taxa:', err);
+    financialError(res, err, 'Erro ao criar taxa');
+  }
+});
+
+// PUT /api/configuracoes/entidades-financeiras/:codigo/taxas/:id
+router.put('/entidades-financeiras/:codigo/taxas/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const bandeira = sanitizeText(req.body.bandeira, 100);
+    const taxa = parseTaxa(req.body.taxa);
+    if (!bandeira || taxa === null) {
+      return res.status(400).json({ error: 'Informe a bandeira e uma taxa entre 0% e 100%' });
+    }
+
+    const [registro] = await db('taxas')
+      .where({
+        id: req.params.id,
+        entidade_financeira_codigo: req.params.codigo,
+      })
+      .update({ bandeira, taxa })
+      .returning('*');
+    if (!registro) return res.status(404).json({ error: 'Taxa n\u00e3o encontrada' });
+    res.json(registro);
+  } catch (err) {
+    console.error('Erro ao atualizar taxa:', err);
+    financialError(res, err, 'Erro ao atualizar taxa');
+  }
+});
+
+// DELETE /api/configuracoes/entidades-financeiras/:codigo/taxas/:id
+router.delete('/entidades-financeiras/:codigo/taxas/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const deleted = await db('taxas')
+      .where({
+        id: req.params.id,
+        entidade_financeira_codigo: req.params.codigo,
+      })
+      .del();
+    if (!deleted) return res.status(404).json({ error: 'Taxa n\u00e3o encontrada' });
+    res.json({ message: 'Taxa removida com sucesso' });
+  } catch (err) {
+    console.error('Erro ao remover taxa:', err);
+    financialError(res, err, 'Erro ao remover taxa');
   }
 });
 

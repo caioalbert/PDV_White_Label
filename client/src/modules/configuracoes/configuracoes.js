@@ -1,9 +1,10 @@
 import api from '../../api.js';
 import icons from '../../icons.js';
-import { formatDate } from '../../utils.js';
+import { escapeHtml, formatDate } from '../../utils.js';
 import { createTable } from '../../components/table.js';
 import { closeModal, openModal } from '../../components/modal.js';
 import { showToast } from '../../components/toast.js';
+import { loadAppConfig, updateCachedAppConfig } from '../../app-config.js';
 import {
   DEFAULT_VENDOR_PERMISSIONS,
   PERMISSION_OPTIONS,
@@ -12,6 +13,7 @@ import {
 let configuracoes = [];
 let usuarios = [];
 let lojas = [];
+let entidadesFinanceiras = [];
 
 function arrayFrom(response) {
   return response?.data || response || [];
@@ -36,30 +38,23 @@ function renderGerais(container) {
   container.innerHTML = `
     <div class="page-header">
       <div>
-        <h1>Regras Comerciais</h1>
-        <p class="page-subtitle">Taxas repassadas ao cliente e limite de desconto do PDV.</p>
+        <h1>Configura\u00e7\u00f5es gerais</h1>
+        <p class="page-subtitle">Identidade da empresa e limite de desconto do PDV.</p>
       </div>
       <button class="btn btn-primary" id="btn-salvar-config">${icons.save()} Salvar alterações</button>
     </div>
 
     <div class="settings-grid">
       <section class="card settings-section">
-        <div class="settings-section-icon">${icons.creditCard()}</div>
+        <div class="settings-section-icon">${icons.store()}</div>
         <div>
-          <h3>Taxas de cartão</h3>
-          <p class="text-muted">Percentuais adicionados automaticamente ao total da venda.</p>
+          <h3>Empresa</h3>
+          <p class="text-muted">Nome exibido no acesso, navega\u00e7\u00e3o e t\u00edtulo do sistema.</p>
         </div>
-        <div class="form-row mt-md">
-          <div class="form-group">
-            <label class="form-label">Débito (%)</label>
-            <input class="form-control" type="number" id="config-taxa-debito" min="0" step="0.01"
-              value="${configValue('taxa_debito', '1.5')}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Crédito (%)</label>
-            <input class="form-control" type="number" id="config-taxa-credito" min="0" step="0.01"
-              value="${configValue('taxa_credito', '3.5')}">
-          </div>
+        <div class="form-group mt-md">
+          <label class="form-label">Nome da empresa</label>
+          <input class="form-control" type="text" id="config-nome-empresa" maxlength="120"
+            value="${escapeHtml(configValue('nome_empresa', 'Sistema de Gest\u00e3o'))}">
         </div>
       </section>
 
@@ -80,13 +75,18 @@ function renderGerais(container) {
 
   container.querySelector('#btn-salvar-config').addEventListener('click', async () => {
     const valores = {
-      taxa_debito: parseFloat(container.querySelector('#config-taxa-debito').value),
-      taxa_credito: parseFloat(container.querySelector('#config-taxa-credito').value),
+      nome_empresa: container.querySelector('#config-nome-empresa').value.trim(),
       desconto_maximo: parseFloat(container.querySelector('#config-desconto').value),
     };
 
-    if (Object.values(valores).some((valor) => !Number.isFinite(valor) || valor < 0)) {
-      showToast('Informe percentuais válidos', 'error');
+    if (!valores.nome_empresa || valores.nome_empresa.length > 120) {
+      showToast('Informe um nome de empresa com at\u00e9 120 caracteres', 'error');
+      return;
+    }
+
+    const percentuais = [valores.desconto_maximo];
+    if (percentuais.some((valor) => !Number.isFinite(valor) || valor < 0)) {
+      showToast('Informe percentuais v\u00e1lidos', 'error');
       return;
     }
 
@@ -97,11 +97,309 @@ function renderGerais(container) {
         )
       );
       configuracoes = arrayFrom(await api.get('/configuracoes'));
-      showToast('Configurações atualizadas com sucesso', 'success');
+      updateCachedAppConfig({ nome_empresa: valores.nome_empresa });
+      await loadAppConfig({ force: true });
+      showToast('Configura\u00e7\u00f5es atualizadas com sucesso', 'success');
     } catch (error) {
       showToast(error.message, 'error');
     }
   });
+}
+
+function entidadeEndpoint(codigo) {
+  return `/configuracoes/entidades-financeiras/${encodeURIComponent(codigo)}`;
+}
+
+function openEntidadeFinanceiraModal(entidade, onSaved) {
+  const isEdit = Boolean(entidade);
+  const content = document.createElement('div');
+  content.innerHTML = `
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Código *</label>
+        <input class="form-control" id="entidade-codigo" maxlength="50"
+          value="${escapeHtml(entidade?.codigo || '')}" placeholder="Ex.: CIELO">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrição *</label>
+        <input class="form-control" id="entidade-descricao" maxlength="255"
+          value="${escapeHtml(entidade?.descricao || '')}" placeholder="Ex.: Cielo Pagamentos">
+      </div>
+    </div>
+  `;
+
+  openModal({
+    title: isEdit ? 'Editar entidade financeira' : 'Nova entidade financeira',
+    content,
+    confirmText: 'Salvar entidade',
+    onConfirm: async () => {
+      const payload = {
+        codigo: content.querySelector('#entidade-codigo').value.trim(),
+        descricao: content.querySelector('#entidade-descricao').value.trim(),
+      };
+      if (!payload.codigo || !payload.descricao) {
+        showToast('Informe o código e a descrição', 'error');
+        return;
+      }
+
+      try {
+        if (isEdit) {
+          await api.put(entidadeEndpoint(entidade.codigo), payload);
+        } else {
+          await api.post('/configuracoes/entidades-financeiras', payload);
+        }
+        closeModal();
+        showToast('Entidade financeira salva com sucesso', 'success');
+        await onSaved();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    },
+  });
+}
+
+function deleteEntidadeFinanceira(entidade, onDeleted) {
+  openModal({
+    title: 'Excluir entidade financeira',
+    content: `
+      <p>Confirma a exclusão de <strong>${escapeHtml(entidade.descricao)}</strong>?</p>
+      <p class="text-muted mt-sm">As taxas vinculadas a essa entidade também serão excluídas.</p>
+    `,
+    confirmText: 'Excluir entidade',
+    onConfirm: async () => {
+      try {
+        await api.del(entidadeEndpoint(entidade.codigo));
+        closeModal();
+        showToast('Entidade financeira excluída', 'success');
+        await onDeleted();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    },
+  });
+}
+
+function openTaxasModal(entidade, onChanged) {
+  const content = document.createElement('div');
+  content.innerHTML = `
+    <div class="card mb-lg">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Bandeira *</label>
+          <input class="form-control" id="taxa-bandeira" maxlength="100" placeholder="Ex.: Visa">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Taxa (%) *</label>
+          <input class="form-control" type="number" id="taxa-percentual"
+            min="0" max="100" step="0.01" placeholder="0,00">
+        </div>
+      </div>
+      <div class="financial-rate-form-actions mt-md">
+        <button class="btn btn-secondary" id="btn-cancelar-edicao-taxa" type="button" hidden>Cancelar edição</button>
+        <button class="btn btn-primary" id="btn-salvar-taxa" type="button">${icons.plus()} Adicionar taxa</button>
+      </div>
+    </div>
+    <div id="taxas-lista"><div class="loading-overlay"><div class="loading-spinner"></div></div></div>
+  `;
+
+  openModal({
+    title: `Taxas — ${escapeHtml(entidade.descricao)}`,
+    content,
+    size: 'lg',
+    hideFooter: true,
+  });
+
+  const bandeiraInput = content.querySelector('#taxa-bandeira');
+  const taxaInput = content.querySelector('#taxa-percentual');
+  const salvarButton = content.querySelector('#btn-salvar-taxa');
+  const cancelarButton = content.querySelector('#btn-cancelar-edicao-taxa');
+  const lista = content.querySelector('#taxas-lista');
+  let taxas = [];
+  let editingId = null;
+
+  function resetForm() {
+    editingId = null;
+    bandeiraInput.value = '';
+    taxaInput.value = '';
+    cancelarButton.hidden = true;
+    salvarButton.innerHTML = `${icons.plus()} Adicionar taxa`;
+    bandeiraInput.focus();
+  }
+
+  function renderTaxas() {
+    lista.innerHTML = `
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr><th>Bandeira</th><th>Taxa</th><th style="width:100px;">Ações</th></tr>
+          </thead>
+          <tbody>
+            ${taxas.length ? taxas.map((registro) => `
+              <tr>
+                <td>${escapeHtml(registro.bandeira)}</td>
+                <td>${Number(registro.taxa).toLocaleString('pt-BR', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}%</td>
+                <td>
+                  <div class="actions">
+                    <button class="btn-icon" data-edit-taxa="${registro.id}" title="Editar" aria-label="Editar">
+                      ${icons.edit()}
+                    </button>
+                    <button class="btn-icon danger" data-delete-taxa="${registro.id}" title="Excluir" aria-label="Excluir">
+                      ${icons.trash2()}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `).join('') : `
+              <tr><td colspan="3" class="text-center text-muted" style="padding:40px;">Nenhuma taxa cadastrada</td></tr>
+            `}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    lista.querySelectorAll('[data-edit-taxa]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const registro = taxas.find((item) => item.id === Number(button.dataset.editTaxa));
+        if (!registro) return;
+        editingId = registro.id;
+        bandeiraInput.value = registro.bandeira;
+        taxaInput.value = Number(registro.taxa);
+        cancelarButton.hidden = false;
+        salvarButton.innerHTML = `${icons.save()} Salvar taxa`;
+        bandeiraInput.focus();
+      });
+    });
+
+    lista.querySelectorAll('[data-delete-taxa]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const registro = taxas.find((item) => item.id === Number(button.dataset.deleteTaxa));
+        if (!registro || !window.confirm(`Excluir a taxa da bandeira ${registro.bandeira}?`)) return;
+        try {
+          await api.del(`${entidadeEndpoint(entidade.codigo)}/taxas/${registro.id}`);
+          showToast('Taxa excluída', 'success');
+          await carregarTaxas();
+          await onChanged();
+        } catch (error) {
+          showToast(error.message, 'error');
+        }
+      });
+    });
+  }
+
+  async function carregarTaxas() {
+    try {
+      taxas = arrayFrom(await api.get(`${entidadeEndpoint(entidade.codigo)}/taxas`));
+      renderTaxas();
+    } catch (error) {
+      lista.innerHTML = `<div class="empty-state"><p>${escapeHtml(error.message)}</p></div>`;
+    }
+  }
+
+  cancelarButton.addEventListener('click', resetForm);
+  salvarButton.addEventListener('click', async () => {
+    const taxaInformada = taxaInput.value.trim();
+    const payload = {
+      bandeira: bandeiraInput.value.trim(),
+      taxa: Number(taxaInformada),
+    };
+    if (!payload.bandeira || !taxaInformada || !Number.isFinite(payload.taxa)
+      || payload.taxa < 0 || payload.taxa > 100) {
+      showToast('Informe a bandeira e uma taxa entre 0% e 100%', 'error');
+      return;
+    }
+
+    try {
+      const endpoint = `${entidadeEndpoint(entidade.codigo)}/taxas`;
+      if (editingId) {
+        await api.put(`${endpoint}/${editingId}`, payload);
+      } else {
+        await api.post(endpoint, payload);
+      }
+      showToast('Taxa salva com sucesso', 'success');
+      resetForm();
+      await carregarTaxas();
+      await onChanged();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  });
+
+  carregarTaxas();
+}
+
+async function renderEntidadesFinanceiras(container) {
+  container.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1>Entidades financeiras</h1>
+        <p class="page-subtitle">Cadastre operadoras, bancos e as taxas aplicadas por bandeira.</p>
+      </div>
+      <button class="btn btn-primary" id="btn-nova-entidade">${icons.plus()} Nova entidade</button>
+    </div>
+    <div id="entidades-financeiras-table"><div class="loading-overlay"><div class="loading-spinner"></div></div></div>
+  `;
+
+  const tableContainer = container.querySelector('#entidades-financeiras-table');
+  let table = null;
+
+  async function carregar() {
+    try {
+      entidadesFinanceiras = arrayFrom(await api.get('/configuracoes/entidades-financeiras'));
+      if (table) {
+        table.update(entidadesFinanceiras);
+        return;
+      }
+      table = createTable(tableContainer, {
+        columns: [
+          { key: 'codigo', label: 'Código' },
+          { key: 'descricao', label: 'Descrição' },
+          {
+            key: 'quantidade_taxas',
+            label: 'Bandeiras cadastradas',
+            render: (value) => String(Number(value) || 0),
+          },
+        ],
+        data: entidadesFinanceiras,
+        searchable: true,
+        searchPlaceholder: 'Buscar entidade financeira...',
+        actions: [
+          {
+            icon: icons.creditCard(),
+            label: 'Taxas',
+            title: 'Gerenciar taxas',
+            showLabel: true,
+            onClick: (entidade) => openTaxasModal(entidade, carregar),
+          },
+          {
+            icon: icons.edit(),
+            title: 'Editar',
+            onClick: (entidade) => openEntidadeFinanceiraModal(entidade, carregar),
+          },
+          {
+            icon: icons.trash2(),
+            title: 'Excluir',
+            class: 'danger',
+            onClick: (entidade) => deleteEntidadeFinanceira(entidade, carregar),
+          },
+        ],
+      });
+    } catch (error) {
+      tableContainer.innerHTML = `
+        <div class="empty-state">
+          <h4>Não foi possível carregar as entidades financeiras</h4>
+          <p>${escapeHtml(error.message)}</p>
+        </div>
+      `;
+    }
+  }
+
+  container.querySelector('#btn-nova-entidade').addEventListener('click', () => {
+    openEntidadeFinanceiraModal(null, carregar);
+  });
+  await carregar();
 }
 
 function openUsuarioModal(usuario, onSaved) {
@@ -414,7 +712,8 @@ export async function render(container) {
 
   container.innerHTML = `
     <div class="tab-nav">
-      <button class="tab-btn active" data-tab="gerais">Regras comerciais</button>
+      <button class="tab-btn active" data-tab="gerais">Gerais</button>
+      <button class="tab-btn" data-tab="entidades-financeiras">Entidades financeiras</button>
       <button class="tab-btn" data-tab="usuarios">Usuários</button>
       <button class="tab-btn" data-tab="comissoes">Comissões</button>
     </div>
@@ -427,6 +726,7 @@ export async function render(container) {
       button.classList.toggle('active', button.dataset.tab === aba);
     });
     if (aba === 'gerais') renderGerais(conteudo);
+    if (aba === 'entidades-financeiras') renderEntidadesFinanceiras(conteudo);
     if (aba === 'usuarios') renderUsuarios(conteudo);
     if (aba === 'comissoes') renderComissoes(conteudo);
   }

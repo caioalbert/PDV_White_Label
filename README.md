@@ -1,4 +1,4 @@
-# PDV Carlos
+# ERP configur?vel
 
 ERP/PDV para operacao de lojas, estoque, compras, producao, vendas, financeiro
 e relatorios.

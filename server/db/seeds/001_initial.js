@@ -172,6 +172,7 @@ export async function seed(knex) {
 
   // === CONFIGURAÇÕES ===
   await knex('configuracoes').insert([
+    { chave: 'nome_empresa', valor: 'Sistema de Gest\u00e3o', descricao: 'Nome da empresa exibido no sistema' },
     { chave: 'taxa_debito', valor: '1.5', descricao: 'Taxa do cartão de débito (%)' },
     { chave: 'taxa_credito', valor: '3.5', descricao: 'Taxa do cartão de crédito (%)' },
     { chave: 'desconto_maximo', valor: '20', descricao: 'Desconto máximo permitido (%)' },

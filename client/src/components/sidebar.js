@@ -3,6 +3,7 @@
  */
 import icons from '../icons.js';
 import { getUser, hasPermission, isAdmin, logout } from '../auth.js';
+import { getCompanyLogoAlt } from '../app-config.js';
 
 const allMenuItems = [
   { route: '/dashboard',     permission: 'dashboard',     label: 'Dashboard',      icon: 'layoutDashboard', section: 'principal' },
@@ -59,7 +60,7 @@ export function renderSidebar() {
 
   return `
     <div class="sidebar-logo">
-      <img src="/logo.png" alt="Carlos Atacadão do Gesso">
+      <img src="/logo.png" alt="${getCompanyLogoAlt()}">
     </div>
     <nav class="sidebar-nav">
       ${nav}

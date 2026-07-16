@@ -1,21 +1,24 @@
 import { changePassword, getDefaultRoute, getUser } from '../../auth.js';
 import icons from '../../icons.js';
 import { showToast } from '../../components/toast.js';
+import { getCompanyLogoAlt, getCompanyName } from '../../app-config.js';
 import { escapeHtml } from '../../utils.js';
 
 const MIN_PASSWORD_LENGTH = 8;
 
 export function render(container) {
   const user = getUser();
+  const companyName = getCompanyName();
+  const logoAlt = getCompanyLogoAlt();
 
   container.innerHTML = `
     <main class="login-shell">
       <section class="login-form-panel" aria-labelledby="password-change-title">
         <div class="login-form-wrap">
           <div class="login-brand">
-            <img src="/logo.png" alt="Atacadão do Gesso">
+            <img src="/logo.png" alt="${logoAlt}">
             <div>
-              <strong>Atacadão do Gesso</strong>
+              <strong>${companyName}</strong>
               <span>Segurança da conta</span>
             </div>
           </div>

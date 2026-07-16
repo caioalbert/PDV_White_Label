@@ -1,15 +1,19 @@
 import { getDefaultRoute, login } from '../../auth.js';
 import icons from '../../icons.js';
+import { getCompanyLogoAlt, getCompanyName } from '../../app-config.js';
 
 export function render(container) {
+  const companyName = getCompanyName();
+  const logoAlt = getCompanyLogoAlt();
+
   container.innerHTML = `
     <main class="login-shell">
       <section class="login-form-panel" aria-labelledby="login-title">
         <div class="login-form-wrap">
           <div class="login-brand">
-            <img src="/logo.png" alt="Atacadão do Gesso">
+            <img src="/logo.png" alt="${logoAlt}">
             <div>
-              <strong>Atacadão do Gesso</strong>
+              <strong>${companyName}</strong>
               <span>Sistema de Gestão</span>
             </div>
           </div>

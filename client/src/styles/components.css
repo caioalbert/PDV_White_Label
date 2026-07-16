@@ -2764,6 +2764,13 @@ kbd {
   height: 22px;
 }
 
+.financial-rate-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
 .commission-store {
   display: flex;
   align-items: center;
