@@ -20,8 +20,10 @@ import vendasRoutes from './src/routes/vendas.js';
 import financeiroRoutes from './src/routes/financeiro.js';
 import relatoriosRoutes from './src/routes/relatorios.js';
 import configuracoesRoutes from './src/routes/configuracoes.js';
+import { createInMemoryRateLimiter } from './src/middleware/rateLimit.js';
 
 const app = express();
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 3001;
 const localCorsOrigins = 'http://localhost:*,http://127.0.0.1:*';
 const corsOriginRules = [
@@ -133,6 +135,8 @@ app.get('/api/health/ready', async (_req, res) => {
     });
   }
 });
+
+app.use('/api', createInMemoryRateLimiter());
 
 // Montagem das rotas
 app.use('/api/auth', authRoutes);

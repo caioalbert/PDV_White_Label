@@ -3,6 +3,11 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import db from '../database.js';
 import { verifyToken } from '../middleware/auth.js';
+import {
+  clearLoginFailures,
+  loginRateLimit,
+  recordLoginFailure,
+} from '../middleware/rateLimit.js';
 import { normalizePermissions } from '../permissions.js';
 import { validatePassword } from '../security/password.js';
 
@@ -32,7 +37,7 @@ function issueToken(usuario) {
 }
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginRateLimit, async (req, res) => {
   try {
     const { login, senha } = req.body;
 
@@ -43,14 +48,17 @@ router.post('/login', async (req, res) => {
     const usuario = await db('usuarios').where({ login: login.trim(), ativo: true }).first();
 
     if (!usuario) {
+      await recordLoginFailure(req);
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
     if (!senhaValida) {
+      await recordLoginFailure(req);
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
+    await clearLoginFailures(req);
     const user = publicUser(usuario);
     const token = issueToken(usuario);
 
