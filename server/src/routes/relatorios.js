@@ -46,16 +46,46 @@ router.get('/vendas-loja', verifyToken, requirePermission('relatorios'), async (
     let query = db('vendas')
       .join('lojas', 'vendas.loja_id', 'lojas.id')
       .select(
+        'lojas.id as loja_id',
         'lojas.nome as loja',
         db.raw('COUNT(vendas.id) as quantidade_vendas'),
         db.raw('SUM(vendas.total) as total'),
         db.raw('AVG(vendas.total) as ticket_medio')
       )
-      .groupBy('lojas.nome', 'lojas.id');
+      .groupBy('lojas.id', 'lojas.nome')
+      .orderBy('lojas.nome');
+
+    let produtosQuery = db('venda_itens')
+      .join('vendas', 'venda_itens.venda_id', 'vendas.id')
+      .join('produtos', 'venda_itens.produto_id', 'produtos.id')
+      .join('lojas', 'vendas.loja_id', 'lojas.id')
+      .select(
+        'lojas.id as loja_id',
+        'produtos.id as produto_id',
+        'produtos.nome as produto',
+        'produtos.unidade',
+        db.raw('SUM(venda_itens.quantidade) as quantidade_total'),
+        db.raw('SUM(venda_itens.subtotal) as receita_total')
+      )
+      .groupBy('lojas.id', 'produtos.id', 'produtos.nome', 'produtos.unidade')
+      .orderBy('lojas.id')
+      .orderBy('quantidade_total', 'desc');
 
     query = aplicarFiltros(query, req, 'vendas.loja_id', 'vendas.created_at');
-    const resultado = await query;
-    res.json(resultado);
+    produtosQuery = aplicarFiltros(produtosQuery, req, 'vendas.loja_id', 'vendas.created_at');
+
+    const [resultado, produtosVendidos] = await Promise.all([query, produtosQuery]);
+    const produtosPorLoja = produtosVendidos.reduce((acc, produto) => {
+      const lista = acc.get(produto.loja_id) || [];
+      lista.push(produto);
+      acc.set(produto.loja_id, lista);
+      return acc;
+    }, new Map());
+
+    res.json(resultado.map((loja) => ({
+      ...loja,
+      produtos_vendidos: produtosPorLoja.get(loja.loja_id) || [],
+    })));
   } catch (err) {
     console.error('Erro no relatório vendas-loja:', err);
     res.status(500).json({ error: 'Erro ao gerar relatório' });

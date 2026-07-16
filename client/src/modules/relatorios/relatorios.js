@@ -1,6 +1,13 @@
 import api from '../../api.js';
 import icons from '../../icons.js';
-import { formatCurrency, formatDate, formatDateTime, getCategoriaLabel, getUnidadeLabel } from '../../utils.js';
+import {
+  escapeHtml,
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  getCategoriaLabel,
+  getUnidadeLabel,
+} from '../../utils.js';
 import { createTable } from '../../components/table.js';
 import { showToast } from '../../components/toast.js';
 
@@ -20,12 +27,13 @@ const relatorios = {
   },
   'vendas-loja': {
     titulo: 'Vendas por loja',
-    descricao: 'Comparativo de vendas e ticket médio.',
+    descricao: 'Comparativo de vendas, ticket médio e produtos vendidos.',
     colunas: [
       { key: 'loja', label: 'Unidade' },
       { key: 'quantidade_vendas', label: 'Vendas' },
       { key: 'total', label: 'Faturamento', type: 'currency' },
       { key: 'ticket_medio', label: 'Ticket médio', type: 'currency' },
+      { key: 'produtos_vendidos', label: 'Produtos vendidos', type: 'products', sortable: false },
     ],
   },
   'produtos-mais-vendidos': {
@@ -117,13 +125,61 @@ function arrayFrom(response) {
   return response?.data || response || [];
 }
 
+function formatNumber(value, maximumFractionDigits = 3) {
+  const num = typeof value === 'string' ? parseFloat(value) : Number(value ?? 0);
+  if (!Number.isFinite(num)) return '0';
+  return num.toLocaleString('pt-BR', { maximumFractionDigits });
+}
+
+function formatProductsText(value) {
+  const produtos = Array.isArray(value) ? value : [];
+  if (produtos.length === 0) return 'Nenhum produto vendido';
+
+  return produtos.map((produto) => {
+    const quantidade = formatNumber(produto.quantidade_total);
+    const unidade = getUnidadeLabel(produto.unidade);
+    const receita = formatCurrency(produto.receita_total);
+    return `${produto.produto || '-'} (${quantidade} ${unidade}) - ${receita}`;
+  }).join(' | ');
+}
+
+function formatProductsHtml(value) {
+  const produtos = Array.isArray(value) ? value : [];
+  if (produtos.length === 0) {
+    return '<span class="text-muted">Nenhum produto vendido</span>';
+  }
+
+  return `
+    <div class="report-products-list">
+      ${produtos.map((produto) => {
+        const quantidade = formatNumber(produto.quantidade_total);
+        const unidade = getUnidadeLabel(produto.unidade);
+        const receita = formatCurrency(produto.receita_total);
+
+        return `
+          <div class="report-product-item">
+            <strong>${escapeHtml(produto.produto || '-')}</strong>
+            <span>${escapeHtml(quantidade)} ${escapeHtml(unidade)} · ${escapeHtml(receita)}</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 function formatValue(value, type) {
   if (type === 'currency') return formatCurrency(value);
   if (type === 'date') return formatDate(value);
   if (type === 'datetime') return formatDateTime(value);
   if (type === 'category') return getCategoriaLabel(value);
   if (type === 'unit') return getUnidadeLabel(value);
+  if (type === 'products') return formatProductsHtml(value);
   return value ?? '-';
+}
+
+function formatCsvValue(value, type) {
+  if (type === 'products') return formatProductsText(value);
+  return formatValue(value, type);
 }
 
 function csvValue(value) {
@@ -137,7 +193,7 @@ function exportarCsv() {
     definicao.colunas.map((coluna) => csvValue(coluna.label)).join(';'),
     ...dadosAtuais.map((item) =>
       definicao.colunas.map((coluna) =>
-        csvValue(formatValue(item[coluna.key], coluna.type))
+        csvValue(formatCsvValue(item[coluna.key], coluna.type))
       ).join(';')
     ),
   ];
@@ -229,7 +285,7 @@ export async function render(container) {
       columns: definicao.colunas.map((coluna) => ({
         key: coluna.key,
         label: coluna.label,
-        sortable: true,
+        sortable: coluna.sortable !== false,
         render: (value) => formatValue(value, coluna.type),
       })),
       data: [],

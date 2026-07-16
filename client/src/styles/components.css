@@ -2657,6 +2657,27 @@ kbd {
   font-size: 0.8rem;
 }
 
+.report-products-list {
+  display: grid;
+  gap: 6px;
+  min-width: 260px;
+}
+
+.report-product-item {
+  display: grid;
+  gap: 2px;
+}
+
+.report-product-item strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.report-product-item span {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
