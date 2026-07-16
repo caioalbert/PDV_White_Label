@@ -169,7 +169,7 @@ test('fluxo completo: cadastro, compra, produção, caixa e venda', async ({ pag
     await clickSidebar(page, '/producao');
     await page.locator('[data-tab="producao"]').click();
     await page.locator('#btn-nova-producao').click();
-    await page.locator('#prod-receita').selectOption({ label: `Composição - ${data.finishedProduct}` });
+    await page.locator('#prod-produto').selectOption({ label: data.finishedProduct });
     await page.locator('#prod-loja').selectOption({ label: data.store });
     await page.locator('#prod-quantidade').fill('10');
     await expect(page.locator('#prod-consumo-container')).toBeVisible();

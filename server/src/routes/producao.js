@@ -4,7 +4,91 @@ import { requirePermission, verifyToken } from '../middleware/auth.js';
 
 const router = Router();
 
+async function listarProdutosProducao() {
+  const produtos = await db('produtos')
+    .select(
+      'id',
+      'codigo_interno',
+      'nome',
+      'categoria',
+      'unidade',
+      'preco_venda',
+      'estoque_minimo',
+      'ativo'
+    )
+    .where({
+      categoria: 'producao_propria',
+      ativo: true,
+    })
+    .orderByRaw('codigo_interno ASC NULLS LAST')
+    .orderBy('nome');
+
+  if (produtos.length === 0) return [];
+
+  const produtoIds = produtos.map((produto) => produto.id);
+  const receitas = await db('receitas')
+    .whereIn('produto_id', produtoIds)
+    .where({ ativo: true })
+    .orderBy('id');
+
+  const receitasPorProduto = new Map();
+  receitas.forEach((receita) => {
+    if (!receitasPorProduto.has(receita.produto_id)) {
+      receitasPorProduto.set(receita.produto_id, receita);
+    }
+  });
+
+  const receitaIds = [...receitasPorProduto.values()].map((receita) => receita.id);
+  let insumosPorReceita = new Map();
+
+  if (receitaIds.length > 0) {
+    const insumos = await db('receita_insumos')
+      .join('produtos', 'receita_insumos.produto_id', 'produtos.id')
+      .whereIn('receita_insumos.receita_id', receitaIds)
+      .select(
+        'receita_insumos.receita_id',
+        'receita_insumos.produto_id',
+        'receita_insumos.quantidade',
+        'produtos.nome as produto_nome',
+        'produtos.unidade'
+      )
+      .orderBy('produtos.nome');
+
+    insumosPorReceita = insumos.reduce((acc, insumo) => {
+      const lista = acc.get(insumo.receita_id) || [];
+      lista.push(insumo);
+      acc.set(insumo.receita_id, lista);
+      return acc;
+    }, new Map());
+  }
+
+  return produtos.map((produto) => {
+    const receita = receitasPorProduto.get(produto.id);
+    const insumos = receita ? (insumosPorReceita.get(receita.id) || []) : [];
+
+    return {
+      ...produto,
+      produto_id: produto.id,
+      receita_id: receita?.id || null,
+      receita_nome: receita?.nome || null,
+      tem_composicao: insumos.length > 0,
+      insumos,
+    };
+  });
+}
+
 // =================== RECEITAS ===================
+
+// GET /api/producao/produtos
+router.get('/produtos', verifyToken, requirePermission('producao'), async (req, res) => {
+  try {
+    const produtos = await listarProdutosProducao();
+    res.json(produtos);
+  } catch (err) {
+    console.error('Erro ao listar produtos de produção:', err);
+    res.status(500).json({ error: 'Erro ao listar produtos de produção' });
+  }
+});
 
 // GET /api/producao/receitas
 router.get('/receitas', verifyToken, requirePermission('producao'), async (req, res) => {
@@ -183,25 +267,39 @@ router.get('/ordens', verifyToken, requirePermission('producao'), async (req, re
 // POST /api/producao/produzir - Executar produção
 router.post('/produzir', verifyToken, requirePermission('producao'), async (req, res) => {
   try {
-    const { receita_id, loja_id, quantidade } = req.body;
+    const { receita_id, produto_id, loja_id, quantidade } = req.body;
     const lojaFiltro = req.user.perfil === 'vendedor' ? req.user.loja_id : loja_id;
     const quantidadeProducao = parseFloat(quantidade);
 
-    if (!receita_id || !lojaFiltro || !Number.isFinite(quantidadeProducao) || quantidadeProducao <= 0) {
-      return res.status(400).json({ error: 'Receita, loja e quantidade são obrigatórios' });
+    if (
+      (!receita_id && !produto_id)
+      || !lojaFiltro
+      || !Number.isFinite(quantidadeProducao)
+      || quantidadeProducao <= 0
+    ) {
+      return res.status(400).json({ error: 'Produto, loja e quantidade são obrigatórios' });
     }
 
-    const receita = await db('receitas')
-      .where({ id: receita_id, ativo: true })
-      .first();
+    let receitaQuery = db('receitas').where({ ativo: true });
+    if (receita_id) {
+      receitaQuery = receitaQuery.where({ id: receita_id });
+    } else {
+      receitaQuery = receitaQuery.where({ produto_id });
+    }
+
+    const receita = await receitaQuery.orderBy('id').first();
 
     if (!receita) {
-      return res.status(404).json({ error: 'Receita não encontrada ou inativa' });
+      return res.status(produto_id ? 400 : 404).json({
+        error: produto_id
+          ? 'Produto sem composição cadastrada'
+          : 'Receita não encontrada ou inativa',
+      });
     }
 
     const insumos = await db('receita_insumos')
       .join('produtos', 'receita_insumos.produto_id', 'produtos.id')
-      .where({ receita_id })
+      .where({ receita_id: receita.id })
       .select('receita_insumos.*', 'produtos.nome as produto_nome');
 
     if (insumos.length === 0) {
@@ -286,7 +384,7 @@ router.post('/produzir', verifyToken, requirePermission('producao'), async (req,
       // Criar ordem de produção
       const [ordem] = await trx('ordens_producao')
         .insert({
-          receita_id,
+          receita_id: receita.id,
           loja_id: lojaFiltro,
           quantidade_produzida: quantidadeProducao,
           usuario_id: req.user.id,

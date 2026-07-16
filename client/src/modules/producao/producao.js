@@ -5,7 +5,7 @@ import { openModal, closeModal } from '../../components/modal.js';
 import { createTable } from '../../components/table.js';
 import { showToast } from '../../components/toast.js';
 
-let currentTab = 'receitas';
+let currentTab = 'producao';
 
 // ==================== RECEITAS ====================
 
@@ -17,7 +17,7 @@ async function loadReceitas(tableContainer, tableRef) {
             tableRef.instance.update(receitas);
         }
     } catch (err) {
-        showToast('Erro ao carregar receitas', 'error');
+        showToast('Erro ao carregar composições', 'error');
     }
 }
 
@@ -38,7 +38,7 @@ async function openReceitaModal(receita = null, onSaved = null) {
         <form id="form-receita">
             <div class="form-row" style="display: flex; gap: 1rem;">
                 <div class="form-group" style="flex: 1;">
-                    <label for="receita-nome">Nome da Receita *</label>
+                    <label for="receita-nome">Nome da Composição *</label>
                     <input type="text" id="receita-nome" class="form-control" required value="${receita?.nome || ''}" />
                 </div>
                 <div class="form-group" style="flex: 1;">
@@ -136,7 +136,7 @@ async function openReceitaModal(receita = null, onSaved = null) {
     }
 
     openModal({
-        title: isEdit ? 'Editar Receita' : 'Nova Receita',
+        title: isEdit ? 'Editar Composição' : 'Nova Composição',
         content,
         size: 'lg',
         confirmText: 'Salvar',
@@ -146,7 +146,7 @@ async function openReceitaModal(receita = null, onSaved = null) {
             const produto_id = parseInt(content.querySelector('#receita-produto').value);
 
             if (!nome) {
-                showToast('Nome da receita é obrigatório', 'error');
+                showToast('Nome da composição é obrigatório', 'error');
                 return;
             }
             if (!produto_id) {
@@ -170,15 +170,15 @@ async function openReceitaModal(receita = null, onSaved = null) {
             try {
                 if (isEdit) {
                     await api.put('/producao/receitas/' + receita.id, data);
-                    showToast('Receita atualizada com sucesso', 'success');
+                    showToast('Composição atualizada com sucesso', 'success');
                 } else {
                     await api.post('/producao/receitas', data);
-                    showToast('Receita criada com sucesso', 'success');
+                    showToast('Composição criada com sucesso', 'success');
                 }
                 closeModal();
                 if (onSaved) onSaved();
             } catch (err) {
-                showToast('Erro ao salvar receita', 'error');
+                showToast('Erro ao salvar composição', 'error');
             }
         }
     });
@@ -220,17 +220,17 @@ async function openReceitaModal(receita = null, onSaved = null) {
 async function deleteReceita(receita, onDeleted) {
     openModal({
         title: 'Confirmar Exclusão',
-        content: `<p>Deseja realmente excluir a receita <strong>${receita.nome}</strong>?</p>`,
+        content: `<p>Deseja realmente excluir a composição <strong>${receita.nome}</strong>?</p>`,
         confirmText: 'Excluir',
         cancelText: 'Cancelar',
         onConfirm: async () => {
             try {
                 await api.del('/producao/receitas/' + receita.id);
-                showToast('Receita excluída com sucesso', 'success');
+                showToast('Composição excluída com sucesso', 'success');
                 closeModal();
                 if (onDeleted) onDeleted();
             } catch (err) {
-                showToast('Erro ao excluir receita', 'error');
+                showToast('Erro ao excluir composição', 'error');
             }
         }
     });
@@ -242,9 +242,9 @@ function renderReceitasTab(tabContent) {
     const header = document.createElement('div');
     header.className = 'page-header';
     header.innerHTML = `
-        <h1>Receitas</h1>
+        <h1>Composições</h1>
         <button class="btn btn-primary" id="btn-nova-receita">
-            ${icons.plus()} Nova Receita
+            ${icons.plus()} Nova Composição
         </button>
     `;
     tabContent.appendChild(header);
@@ -257,7 +257,7 @@ function renderReceitasTab(tabContent) {
 
     tableRef.instance = createTable(tableContainer, {
         columns: [
-            { key: 'nome', label: 'Nome da Receita', sortable: true },
+            { key: 'nome', label: 'Nome da Composição', sortable: true },
             {
                 key: 'produto_nome',
                 label: 'Produto Final',
@@ -354,6 +354,18 @@ async function loadOrdens(tableContainer, tableRef) {
     }
 }
 
+async function loadProdutosProducao(tableRef) {
+    try {
+        const res = await api.get('/producao/produtos');
+        const produtos = res.data || res || [];
+        if (tableRef.instance) {
+            tableRef.instance.update(produtos);
+        }
+    } catch (err) {
+        showToast('Erro ao carregar produtos de produção', 'error');
+    }
+}
+
 function getOrdemStatusBadge(status) {
     const map = {
         concluido: 'badge-success',
@@ -378,30 +390,52 @@ function getOrdemStatusLabel(status) {
     return map[status] || status;
 }
 
-async function openNovaProducaoModal(onSaved) {
-    let receitas = [];
+async function openNovaProducaoModal(onSaved, produtoInicial = null) {
+    if (produtoInicial && !produtoInicial.tem_composicao) {
+        showToast('Produto sem composição cadastrada', 'warning');
+        return;
+    }
+
+    let produtos = [];
     let lojas = [];
 
     try {
-        const [resReceitas, resLojas] = await Promise.all([
-            api.get('/producao/receitas'),
+        const [resProdutos, resLojas] = await Promise.all([
+            api.get('/producao/produtos'),
             api.get('/lojas?situacao=ativa')
         ]);
-        receitas = resReceitas.data || resReceitas || [];
+        produtos = resProdutos.data || resProdutos || [];
         lojas = resLojas.data || resLojas || [];
     } catch {
         showToast('Erro ao carregar dados', 'error');
         return;
     }
 
+    const produtoSelecionadoInicial = produtoInicial
+        ? produtos.find(p => p.id == produtoInicial.id)
+        : null;
+    const produtosComComposicao = produtos.filter(p => p.tem_composicao);
+
+    if (produtosComComposicao.length === 0) {
+        showToast('Nenhum produto de produção própria possui composição cadastrada', 'warning');
+        return;
+    }
+
+    const produtoOptions = produtos.map((produto) => {
+        const selected = produtoSelecionadoInicial?.id == produto.id ? 'selected' : '';
+        const disabled = !produto.tem_composicao ? 'disabled' : '';
+        const label = `${produto.nome}${!produto.tem_composicao ? ' - sem composição' : ''}`;
+        return `<option value="${produto.id}" ${selected} ${disabled}>${label}</option>`;
+    }).join('');
+
     const content = document.createElement('div');
     content.innerHTML = `
         <form id="form-producao">
             <div class="form-group">
-                <label for="prod-receita">Receita *</label>
-                <select id="prod-receita" class="form-control" required>
-                    <option value="">Selecione uma receita...</option>
-                    ${receitas.map(r => `<option value="${r.id}">${r.nome}</option>`).join('')}
+                <label for="prod-produto">Produto Final *</label>
+                <select id="prod-produto" class="form-control" required>
+                    <option value="">Selecione um produto...</option>
+                    ${produtoOptions}
                 </select>
             </div>
             <div class="form-row" style="display: flex; gap: 1rem;">
@@ -436,24 +470,25 @@ async function openNovaProducaoModal(onSaved) {
         </form>
     `;
 
-    let selectedReceita = null;
+    let selectedProduto = null;
     let estoqueData = [];
 
     async function updateConsumo() {
-        const receitaId = content.querySelector('#prod-receita').value;
+        const produtoId = content.querySelector('#prod-produto').value;
         const quantidade = parseInt(content.querySelector('#prod-quantidade').value) || 0;
         const lojaId = content.querySelector('#prod-loja').value;
         const consumoContainer = content.querySelector('#prod-consumo-container');
         const tbody = content.querySelector('#prod-consumo-body');
 
-        if (!receitaId || !quantidade || !lojaId) {
+        if (!produtoId || !quantidade || !lojaId) {
             consumoContainer.style.display = 'none';
             return;
         }
 
-        selectedReceita = receitas.find(r => r.id == receitaId);
-        if (!selectedReceita || !selectedReceita.insumos || selectedReceita.insumos.length === 0) {
+        selectedProduto = produtos.find(p => p.id == produtoId);
+        if (!selectedProduto || !selectedProduto.insumos || selectedProduto.insumos.length === 0) {
             consumoContainer.style.display = 'none';
+            showToast('Produto sem composição cadastrada', 'warning');
             return;
         }
 
@@ -467,7 +502,7 @@ async function openNovaProducaoModal(onSaved) {
 
         consumoContainer.style.display = 'block';
 
-        tbody.innerHTML = selectedReceita.insumos.map(insumo => {
+        tbody.innerHTML = selectedProduto.insumos.map(insumo => {
             const qtdNecessaria = insumo.quantidade * quantidade;
             const estoqueItem = estoqueData.find(e =>
                 (e.produto_id || e.produto?.id) == insumo.produto_id
@@ -498,12 +533,12 @@ async function openNovaProducaoModal(onSaved) {
         confirmText: 'Produzir',
         cancelText: 'Cancelar',
         onConfirm: async () => {
-            const receita_id = parseInt(content.querySelector('#prod-receita').value);
+            const produto_id = parseInt(content.querySelector('#prod-produto').value);
             const quantidade = parseInt(content.querySelector('#prod-quantidade').value);
             const loja_id = parseInt(content.querySelector('#prod-loja').value);
 
-            if (!receita_id) {
-                showToast('Selecione uma receita', 'error');
+            if (!produto_id) {
+                showToast('Selecione o produto final', 'error');
                 return;
             }
             if (!quantidade || quantidade <= 0) {
@@ -516,8 +551,14 @@ async function openNovaProducaoModal(onSaved) {
             }
 
             // Check stock sufficiency
-            if (selectedReceita && selectedReceita.insumos) {
-                const insuficiente = selectedReceita.insumos.some(insumo => {
+            selectedProduto = produtos.find(p => p.id == produto_id);
+            if (!selectedProduto?.tem_composicao || !selectedProduto.insumos?.length) {
+                showToast('Produto sem composição cadastrada', 'error');
+                return;
+            }
+
+            if (selectedProduto && selectedProduto.insumos) {
+                const insuficiente = selectedProduto.insumos.some(insumo => {
                     const qtdNecessaria = insumo.quantidade * quantidade;
                     const estoqueItem = estoqueData.find(e =>
                         (e.produto_id || e.produto?.id) == insumo.produto_id
@@ -534,7 +575,7 @@ async function openNovaProducaoModal(onSaved) {
 
             try {
                 await api.post('/producao/produzir', {
-                    receita_id,
+                    produto_id,
                     quantidade,
                     loja_id
                 });
@@ -548,9 +589,11 @@ async function openNovaProducaoModal(onSaved) {
     });
 
     // Bind change events
-    content.querySelector('#prod-receita').addEventListener('change', updateConsumo);
+    content.querySelector('#prod-produto').addEventListener('change', updateConsumo);
     content.querySelector('#prod-quantidade').addEventListener('input', updateConsumo);
     content.querySelector('#prod-loja').addEventListener('change', updateConsumo);
+
+    updateConsumo();
 }
 
 function renderProducaoTab(tabContent) {
@@ -566,13 +609,79 @@ function renderProducaoTab(tabContent) {
     `;
     tabContent.appendChild(header);
 
-    const tableContainer = document.createElement('div');
-    tableContainer.className = 'table-container';
-    tabContent.appendChild(tableContainer);
+    const produtosTitle = document.createElement('h2');
+    produtosTitle.style.margin = '0 0 1rem';
+    produtosTitle.textContent = 'Produtos de produção própria';
+    tabContent.appendChild(produtosTitle);
 
-    const tableRef = { instance: null };
+    const produtosContainer = document.createElement('div');
+    produtosContainer.className = 'table-container';
+    tabContent.appendChild(produtosContainer);
 
-    tableRef.instance = createTable(tableContainer, {
+    const produtosRef = { instance: null };
+
+    produtosRef.instance = createTable(produtosContainer, {
+        columns: [
+            {
+                key: 'codigo_interno',
+                label: 'Código',
+                sortable: true,
+                render: (val) => val || '-'
+            },
+            {
+                key: 'nome',
+                label: 'Produto',
+                sortable: true
+            },
+            {
+                key: 'unidade',
+                label: 'Unidade',
+                render: (val) => getUnidadeLabel(val)
+            },
+            {
+                key: 'tem_composicao',
+                label: 'Composição',
+                render: (val, row) => val
+                    ? `<span class="badge badge-success">Configurada</span> <span class="text-muted">${row.insumos?.length || 0} insumo(s)</span>`
+                    : '<span class="badge badge-warning">Sem composição</span>'
+            },
+            {
+                key: 'receita_nome',
+                label: 'Referência',
+                render: (val, row) => row.tem_composicao ? (val || 'Composição cadastrada') : 'Configure em Produtos'
+            }
+        ],
+        data: [],
+        searchable: true,
+        pageSize: 10,
+        rowClass: (produto) => produto.tem_composicao ? '' : 'row-warning',
+        actions: [
+            {
+                icon: icons.play ? icons.play() : icons.plus(),
+                title: 'Produzir',
+                label: 'Produzir',
+                showLabel: true,
+                show: (produto) => produto.tem_composicao,
+                onClick: (produto) => openNovaProducaoModal(() => {
+                    loadProdutosProducao(produtosRef);
+                    loadOrdens(ordensContainer, ordensRef);
+                }, produto)
+            }
+        ]
+    });
+
+    const ordensTitle = document.createElement('h2');
+    ordensTitle.style.margin = '2rem 0 1rem';
+    ordensTitle.textContent = 'Histórico de produção';
+    tabContent.appendChild(ordensTitle);
+
+    const ordensContainer = document.createElement('div');
+    ordensContainer.className = 'table-container';
+    tabContent.appendChild(ordensContainer);
+
+    const ordensRef = { instance: null };
+
+    ordensRef.instance = createTable(ordensContainer, {
         columns: [
             {
                 key: 'created_at',
@@ -582,7 +691,7 @@ function renderProducaoTab(tabContent) {
             },
             {
                 key: 'receita_nome',
-                label: 'Receita',
+                label: 'Composição',
                 sortable: true,
                 render: (val, row) => val || row.receita?.nome || '-'
             },
@@ -615,10 +724,14 @@ function renderProducaoTab(tabContent) {
     });
 
     header.querySelector('#btn-nova-producao').addEventListener('click', () => {
-        openNovaProducaoModal(() => loadOrdens(tableContainer, tableRef));
+        openNovaProducaoModal(() => {
+            loadProdutosProducao(produtosRef);
+            loadOrdens(ordensContainer, ordensRef);
+        });
     });
 
-    loadOrdens(tableContainer, tableRef);
+    loadProdutosProducao(produtosRef);
+    loadOrdens(ordensContainer, ordensRef);
 }
 
 // ==================== MAIN RENDER ====================
@@ -630,8 +743,8 @@ export function render(container) {
     const tabs = document.createElement('div');
     tabs.className = 'tab-nav';
     tabs.innerHTML = `
-        <button class="tab-btn active" data-tab="receitas">Receitas</button>
-        <button class="tab-btn" data-tab="producao">Produção</button>
+        <button class="tab-btn active" data-tab="producao">Produção</button>
+        <button class="tab-btn" data-tab="receitas">Composições</button>
     `;
     container.appendChild(tabs);
 
@@ -655,5 +768,5 @@ export function render(container) {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
-    switchTab('receitas');
+    switchTab(currentTab);
 }
