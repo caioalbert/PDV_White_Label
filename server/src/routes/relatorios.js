@@ -98,13 +98,14 @@ router.get('/produtos-mais-vendidos', verifyToken, requirePermission('relatorios
     let query = db('venda_itens')
       .join('vendas', 'venda_itens.venda_id', 'vendas.id')
       .join('produtos', 'venda_itens.produto_id', 'produtos.id')
+      .leftJoin('produto_categorias', 'produtos.categoria_id', 'produto_categorias.id')
       .select(
         'produtos.nome as produto',
-        'produtos.categoria',
+        'produto_categorias.slug as categoria',
         db.raw('SUM(venda_itens.quantidade) as quantidade_total'),
         db.raw('SUM(venda_itens.subtotal) as receita_total')
       )
-      .groupBy('produtos.nome', 'produtos.categoria', 'produtos.id')
+      .groupBy('produtos.nome', 'produto_categorias.slug', 'produtos.id')
       .orderBy('quantidade_total', 'desc')
       .limit(20);
 
@@ -127,10 +128,11 @@ router.get('/estoque-atual', verifyToken, requirePermission('relatorios'), async
   try {
     let query = db('estoque')
       .join('produtos', 'estoque.produto_id', 'produtos.id')
+      .leftJoin('produto_categorias', 'produtos.categoria_id', 'produto_categorias.id')
       .join('lojas', 'estoque.loja_id', 'lojas.id')
       .select(
         'produtos.nome as produto',
-        'produtos.categoria',
+        'produto_categorias.slug as categoria',
         'produtos.unidade',
         'lojas.nome as loja',
         'estoque.quantidade',
@@ -157,12 +159,13 @@ router.get('/estoque-minimo', verifyToken, requirePermission('relatorios'), asyn
   try {
     let query = db('estoque')
       .join('produtos', 'estoque.produto_id', 'produtos.id')
+      .leftJoin('produto_categorias', 'produtos.categoria_id', 'produto_categorias.id')
       .join('lojas', 'estoque.loja_id', 'lojas.id')
       .whereRaw('estoque.quantidade < produtos.estoque_minimo')
       .where('produtos.ativo', true)
       .select(
         'produtos.nome as produto',
-        'produtos.categoria',
+        'produto_categorias.slug as categoria',
         'lojas.nome as loja',
         'estoque.quantidade',
         'produtos.estoque_minimo',

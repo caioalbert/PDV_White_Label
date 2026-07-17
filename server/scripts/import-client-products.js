@@ -1,6 +1,5 @@
 import db from '../src/database.js';
 
-const categoriasValidas = new Set(['gesso_convencional', 'drywall', 'producao_propria']);
 const unidadesValidas = new Set([
   'unidade',
   'saco',
@@ -53,7 +52,7 @@ function gerarCodigoInterno(id) {
   return `PRD${String(id).padStart(6, '0')}`;
 }
 
-function validarCatalogo() {
+function validarCatalogo(categoriasPorSlug) {
   const codigos = new Set();
 
   for (const produto of produtosCliente) {
@@ -66,7 +65,7 @@ function validarCatalogo() {
     if (!produto.nome.trim()) {
       throw new Error(`Nome obrigatório para o código do cliente ${produto.codigoCliente}`);
     }
-    if (!categoriasValidas.has(produto.categoria)) {
+    if (!categoriasPorSlug.has(produto.categoria)) {
       throw new Error(`Categoria inválida para ${produto.codigoCliente}: ${produto.categoria}`);
     }
     if (!unidadesValidas.has(produto.unidade)) {
@@ -77,8 +76,6 @@ function validarCatalogo() {
 }
 
 async function importarProdutos() {
-  validarCatalogo();
-
   const lojas = await db('lojas').select('id').orderBy('id');
   if (lojas.length === 0) {
     throw new Error('Cadastre ao menos uma loja antes de importar produtos');
@@ -86,11 +83,19 @@ async function importarProdutos() {
 
   return db.transaction(async (trx) => {
     const resultado = [];
+    const categorias = await trx('produto_categorias')
+      .where({ ativo: true })
+      .select('id', 'slug');
+    const categoriasPorSlug = new Map(categorias.map((categoria) => [categoria.slug, categoria]));
+
+    validarCatalogo(categoriasPorSlug);
 
     for (const produto of produtosCliente) {
+      const categoria = categoriasPorSlug.get(produto.categoria);
       const dadosProduto = {
         nome: produto.nome,
-        categoria: produto.categoria,
+        categoria: categoria.slug,
+        categoria_id: categoria.id,
         unidade: produto.unidade,
         preco_venda: 0,
         estoque_minimo: 0,

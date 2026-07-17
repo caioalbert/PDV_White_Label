@@ -66,6 +66,7 @@ router.get(
   try {
     let query = db('estoque')
       .join('produtos', 'estoque.produto_id', 'produtos.id')
+      .leftJoin('produto_categorias', 'produtos.categoria_id', 'produto_categorias.id')
       .join('lojas', 'estoque.loja_id', 'lojas.id')
       .select(
         'estoque.id',
@@ -73,7 +74,9 @@ router.get(
         'estoque.updated_at',
         'produtos.id as produto_id',
         'produtos.nome as produto_nome',
-        'produtos.categoria',
+        'produtos.categoria_id',
+        'produto_categorias.slug as categoria',
+        'produto_categorias.nome as categoria_nome',
         'produtos.unidade',
         'produtos.preco_venda',
         'produtos.estoque_minimo',
@@ -85,7 +88,7 @@ router.get(
 
     const { loja_id, categoria, search } = req.query;
     if (loja_id) query = query.where('estoque.loja_id', loja_id);
-    if (categoria) query = query.where('produtos.categoria', categoria);
+    if (categoria) query = query.where('produto_categorias.slug', categoria);
     if (search) query = query.where('produtos.nome', 'ilike', `%${search}%`);
 
     // Vendedor só vê estoque da própria loja
