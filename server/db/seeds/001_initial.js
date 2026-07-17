@@ -1,6 +1,12 @@
 import bcrypt from 'bcryptjs';
 import { validatePassword } from '../../src/security/password.js';
 
+const defaultProductCategories = [
+  { slug: 'gesso_convencional', nome: 'Gesso Convencional', permite_composicao: false },
+  { slug: 'drywall', nome: 'Drywall', permite_composicao: false },
+  { slug: 'producao_propria', nome: 'Produção Própria', permite_composicao: true },
+];
+
 /**
  * @param {import('knex').Knex} knex
  */
@@ -41,11 +47,14 @@ export async function seed(knex) {
   await knex('estoque_movimentacoes').del();
   await knex('estoque').del();
   await knex('produtos').del();
+  await knex('produto_categorias').del();
   await knex('fornecedores').del();
   await knex('clientes').del();
   await knex('usuarios').del();
   await knex('lojas').del();
   await knex('configuracoes').del();
+
+  await knex('produto_categorias').insert(defaultProductCategories);
 
   // === LOJAS ===
   const [lojaMundubim] = await knex('lojas').insert([

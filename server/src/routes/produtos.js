@@ -2,12 +2,16 @@ import { Router } from 'express';
 import db from '../database.js';
 import {
   requireAnyPermission,
+  requireAdmin,
   requirePermission,
   verifyToken,
 } from '../middleware/auth.js';
+import {
+  categoryAllowsComposition,
+  slugifyCategoryName,
+} from '../productCategories.js';
 
 const router = Router();
-const categoriasValidas = new Set(['gesso_convencional', 'drywall', 'producao_propria']);
 const unidadesValidas = new Set([
   'unidade',
   'saco',
@@ -21,9 +25,8 @@ const unidadesValidas = new Set([
   'chapa',
 ]);
 
-function validarProduto({ nome, categoria, unidade, preco_venda, estoque_minimo }) {
+function validarProduto({ nome, unidade, preco_venda, estoque_minimo }) {
   if (!String(nome || '').trim()) return 'Nome é obrigatório';
-  if (!categoriasValidas.has(categoria)) return 'Categoria inválida';
   if (!unidadesValidas.has(unidade)) return 'Unidade de medida inválida';
 
   const preco = parseFloat(preco_venda);
@@ -33,11 +36,52 @@ function validarProduto({ nome, categoria, unidade, preco_venda, estoque_minimo 
   return null;
 }
 
+function publicCategory(category) {
+  return {
+    id: category.id,
+    slug: category.slug,
+    nome: category.nome,
+    permite_composicao: Boolean(category.permite_composicao),
+    ativo: Boolean(category.ativo),
+  };
+}
+
+async function findActiveCategory(slug) {
+  const categoria = String(slug || '').trim();
+  if (!categoria) return null;
+
+  return db('produto_categorias')
+    .where({ slug: categoria, ativo: true })
+    .first();
+}
+
+async function validarCategoriaProduto(slug) {
+  const category = await findActiveCategory(slug);
+  return category ? null : 'Categoria inválida';
+}
+
+async function selectProductById(id) {
+  return db('produtos')
+    .leftJoin('produto_categorias', 'produtos.categoria', 'produto_categorias.slug')
+    .select(
+      'produtos.*',
+      'produto_categorias.nome as categoria_nome',
+      'produto_categorias.permite_composicao as categoria_permite_composicao'
+    )
+    .where('produtos.id', id)
+    .first();
+}
+
 // GET /api/produtos
 router.get('/', verifyToken, async (req, res) => {
   try {
     let query = db('produtos')
-      .select('produtos.*')
+      .leftJoin('produto_categorias', 'produtos.categoria', 'produto_categorias.slug')
+      .select(
+        'produtos.*',
+        'produto_categorias.nome as categoria_nome',
+        'produto_categorias.permite_composicao as categoria_permite_composicao'
+      )
       .select(
         db.raw(`
           EXISTS (
@@ -78,10 +122,57 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/produtos/categorias
+router.get('/categorias', verifyToken, async (_req, res) => {
+  try {
+    const categorias = await db('produto_categorias')
+      .where({ ativo: true })
+      .orderBy('nome');
+    res.json(categorias.map(publicCategory));
+  } catch (err) {
+    console.error('Erro ao listar categorias de produtos:', err);
+    res.status(500).json({ error: 'Erro ao listar categorias de produtos' });
+  }
+});
+
+// POST /api/produtos/categorias
+router.post('/categorias', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const nome = String(req.body?.nome || '').trim();
+    const slug = slugifyCategoryName(req.body?.slug || nome);
+    const permiteComposicao = req.body?.permite_composicao === true
+      || req.body?.permite_composicao === 'true';
+
+    if (!nome) {
+      return res.status(400).json({ error: 'Nome da categoria é obrigatório' });
+    }
+    if (!slug) {
+      return res.status(400).json({ error: 'Informe um nome com letras ou números' });
+    }
+
+    const [categoria] = await db('produto_categorias')
+      .insert({
+        nome,
+        slug,
+        permite_composicao: permiteComposicao,
+        ativo: true,
+      })
+      .returning('*');
+
+    res.status(201).json(publicCategory(categoria));
+  } catch (err) {
+    console.error('Erro ao criar categoria de produto:', err);
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Já existe uma categoria com esse nome' });
+    }
+    res.status(500).json({ error: 'Erro ao criar categoria de produto' });
+  }
+});
+
 // GET /api/produtos/:id
 router.get('/:id', verifyToken, async (req, res) => {
   try {
-    const produto = await db('produtos').where({ id: req.params.id }).first();
+    const produto = await selectProductById(req.params.id);
     if (!produto) return res.status(404).json({ error: 'Produto não encontrado' });
     res.json(produto);
   } catch (err) {
@@ -131,11 +222,11 @@ router.put('/:id/composicao', verifyToken, requirePermission('produtos'), async 
       return res.status(400).json({ error: 'A composição deve ser uma lista de insumos' });
     }
 
-    const produto = await db('produtos').where({ id: produtoId }).first();
+    const produto = await selectProductById(produtoId);
     if (!produto) return res.status(404).json({ error: 'Produto não encontrado' });
-    if (produto.categoria !== 'producao_propria') {
+    if (!categoryAllowsComposition(produto)) {
       return res.status(400).json({
-        error: 'A composição só pode ser cadastrada em produtos de produção própria',
+        error: 'A composição só pode ser cadastrada em produtos de categorias de produção',
       });
     }
 
@@ -228,12 +319,14 @@ router.post('/', verifyToken, requireAnyPermission('produtos', 'compras'), async
     } = req.body;
     const erroValidacao = validarProduto({
       nome,
-      categoria,
       unidade,
       preco_venda,
       estoque_minimo,
     });
     if (erroValidacao) return res.status(400).json({ error: erroValidacao });
+
+    const erroCategoria = await validarCategoriaProduto(categoria);
+    if (erroCategoria) return res.status(400).json({ error: erroCategoria });
 
     const produtoMesmoNome = await db('produtos')
       .whereRaw('LOWER(TRIM(nome)) = LOWER(TRIM(?))', [nome])
@@ -301,12 +394,14 @@ router.put('/:id', verifyToken, requirePermission('produtos'), async (req, res) 
     } = req.body;
     const erroValidacao = validarProduto({
       nome,
-      categoria,
       unidade,
       preco_venda,
       estoque_minimo,
     });
     if (erroValidacao) return res.status(400).json({ error: erroValidacao });
+
+    const erroCategoria = await validarCategoriaProduto(categoria);
+    if (erroCategoria) return res.status(400).json({ error: erroCategoria });
 
     const [produto] = await db('produtos')
       .where({ id: req.params.id })

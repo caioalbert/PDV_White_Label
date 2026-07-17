@@ -12,15 +12,21 @@ import {
   formatDate,
   formatDateTime,
   formatPhone,
-  getCategoriaLabel,
   getUnidadeLabel,
   maskInput,
 } from '../../utils.js';
+import {
+  DEFAULT_PRODUCT_CATEGORIES,
+  loadProductCategories,
+  productCategoryLabel,
+  renderCategoryFilterButtons,
+} from '../../productCategories.js';
 import { createTable } from '../../components/table.js';
 import { closeModal, openModal } from '../../components/modal.js';
 import { showToast } from '../../components/toast.js';
 
 let produtos = [];
+let categoriasProduto = [...DEFAULT_PRODUCT_CATEGORIES];
 let lojas = [];
 let estoque = [];
 let estoqueOutrasLojas = new Map();
@@ -67,13 +73,15 @@ function statusPagamentoLabel(status) {
 }
 
 async function loadBaseData() {
-  const [produtosRes, lojasRes, configsRes] = await Promise.all([
+  const [produtosRes, lojasRes, configsRes, categoriasRes] = await Promise.all([
     api.get('/produtos?ativo=true'),
     api.get('/lojas?tipo=loja&situacao=ativa'),
     api.get('/configuracoes'),
+    loadProductCategories(),
   ]);
 
   produtos = arrayFrom(produtosRes);
+  categoriasProduto = categoriasRes;
   lojas = arrayFrom(lojasRes).filter((loja) => loja.situacao === 'ativa');
 
   if (!isAdmin()) {
@@ -168,6 +176,7 @@ function adicionarProduto(produto, quantidade = 1) {
       produto_id: produto.id,
       nome: produto.nome,
       categoria: produto.categoria,
+      categoria_nome: produto.categoria_nome,
       unidade: produto.unidade,
       preco_unitario: preco,
       quantidade: quantidadeInformada,
@@ -518,10 +527,7 @@ function renderPdv(container) {
           <div class="pdv-customer-card" id="pdv-cliente-card"></div>
 
           <div class="filter-tabs compact-tabs" id="pdv-categorias">
-            <button class="btn-filter active" data-categoria="">Todos</button>
-            <button class="btn-filter" data-categoria="gesso_convencional">Gesso</button>
-            <button class="btn-filter" data-categoria="drywall">Drywall</button>
-            <button class="btn-filter" data-categoria="producao_propria">Produção própria</button>
+            ${renderCategoryFilterButtons(categoriasProduto)}
           </div>
 
           <div class="pdv-product-list-header">
@@ -891,7 +897,7 @@ function renderPdv(container) {
               <div class="pdv-product-name">${escapeHtml(produto.nome)}</div>
               <div class="pdv-product-info">
                 <span>${escapeHtml(produto.codigo_interno || `#${produto.id}`)}</span>
-                <span>${getCategoriaLabel(produto.categoria)}</span>
+                <span>${escapeHtml(productCategoryLabel(produto, categoriasProduto))}</span>
                 <span>${getUnidadeLabel(produto.unidade)}</span>
               </div>
               <div class="pdv-stock-line">
@@ -1005,7 +1011,7 @@ function renderPdv(container) {
             <div class="pdv-cart-item-top">
               <div>
                 <strong>${escapeHtml(item.nome)}</strong>
-                <small>${getCategoriaLabel(item.categoria)} · ${getUnidadeLabel(item.unidade)}</small>
+                <small>${escapeHtml(productCategoryLabel(item, categoriasProduto))} · ${getUnidadeLabel(item.unidade)}</small>
               </div>
               <button class="pdv-cart-item-remove" data-remover="${index}" title="Remover item" aria-label="Remover item">
                 ${icons.trash2()}

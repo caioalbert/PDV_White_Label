@@ -1,6 +1,11 @@
 import api from '../../api.js';
 import icons from '../../icons.js';
 import {
+    DEFAULT_PRODUCT_CATEGORIES,
+    loadProductCategories,
+    renderCategoryOptions,
+} from '../../productCategories.js';
+import {
     escapeHtml,
     formatCurrency,
     formatDate,
@@ -61,19 +66,22 @@ async function openNovaCompraModal(compraParaEditar = null) {
     let fornecedores = [];
     let lojas = [];
     let produtosDisponiveis = [];
+    let categoriasProduto = [...DEFAULT_PRODUCT_CATEGORIES];
     let itensCompra = [];
     let compraEdicao = null;
     const isEdicao = Boolean(compraParaEditar?.id);
 
     try {
-        const [resFornecedores, resLojas, resProdutos] = await Promise.all([
+        const [resFornecedores, resLojas, resProdutos, resCategorias] = await Promise.all([
             api.get('/fornecedores'),
             api.get('/lojas?situacao=ativa'),
-            api.get('/produtos?ativo=true')
+            api.get('/produtos?ativo=true'),
+            loadProductCategories()
         ]);
         fornecedores = resFornecedores.data || resFornecedores || [];
         lojas = resLojas.data || resLojas || [];
         produtosDisponiveis = resProdutos.data || resProdutos || [];
+        categoriasProduto = resCategorias;
         if (isEdicao) {
             const resCompra = await api.get('/compras/' + compraParaEditar.id);
             compraEdicao = resCompra.data || resCompra;
@@ -149,9 +157,7 @@ async function openNovaCompraModal(compraParaEditar = null) {
                     <div class="form-group">
                         <label for="novo-produto-categoria">Categoria *</label>
                         <select id="novo-produto-categoria" class="form-control">
-                            <option value="gesso_convencional">Gesso Convencional</option>
-                            <option value="drywall">Drywall</option>
-                            <option value="producao_propria">Produção Própria</option>
+                            ${renderCategoryOptions(categoriasProduto, categoriasProduto[0]?.slug || '')}
                         </select>
                     </div>
                     <div class="form-group">
