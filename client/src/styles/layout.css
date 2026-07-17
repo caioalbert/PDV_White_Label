@@ -296,6 +296,13 @@
   gap: var(--space-md);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
 .page-title {
   font-size: 1.5rem;
   font-weight: 700;

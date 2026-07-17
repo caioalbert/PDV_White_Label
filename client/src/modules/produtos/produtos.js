@@ -1,6 +1,15 @@
 import api from '../../api.js';
+import { isAdmin } from '../../auth.js';
 import icons from '../../icons.js';
-import { formatCurrency, getCategoriaLabel, getUnidadeLabel } from '../../utils.js';
+import { escapeHtml, formatCurrency, getUnidadeLabel } from '../../utils.js';
+import {
+    DEFAULT_PRODUCT_CATEGORIES,
+    categoryAllowsComposition,
+    loadProductCategories,
+    productCategoryLabel,
+    renderCategoryFilterButtons,
+    renderCategoryOptions,
+} from '../../productCategories.js';
 import { openModal, closeModal } from '../../components/modal.js';
 import { createTable } from '../../components/table.js';
 import { showToast } from '../../components/toast.js';
@@ -8,6 +17,8 @@ import { showToast } from '../../components/toast.js';
 let tableInstance = null;
 let currentCategoria = '';
 let allProdutos = [];
+let categoriasProduto = [...DEFAULT_PRODUCT_CATEGORIES];
+let filtersContainer = null;
 
 async function loadProdutos() {
     try {
@@ -23,6 +34,76 @@ async function loadProdutos() {
     }
 }
 
+async function loadCategorias(force = false) {
+    categoriasProduto = await loadProductCategories({ force });
+    if (filtersContainer) renderCategoriaFilters();
+}
+
+function produtoPermiteComposicao(produto) {
+    return categoryAllowsComposition(produto, categoriasProduto);
+}
+
+function renderCategoriaFilters() {
+    if (!filtersContainer) return;
+
+    filtersContainer.innerHTML = renderCategoryFilterButtons(categoriasProduto, currentCategoria);
+    filtersContainer.querySelectorAll('.btn-filter').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentCategoria = btn.dataset.categoria;
+            renderCategoriaFilters();
+            loadProdutos();
+        });
+    });
+}
+
+function openCategoriaModal() {
+    const content = document.createElement('div');
+    content.innerHTML = `
+        <form class="form-grid">
+            <div class="form-group">
+                <label for="categoria-nome">Nome *</label>
+                <input type="text" id="categoria-nome" class="form-control" required />
+            </div>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="categoria-permite-composicao" />
+                    Permite composição e produção própria
+                </label>
+            </div>
+        </form>
+    `;
+
+    openModal({
+        title: 'Nova Categoria',
+        content,
+        confirmText: 'Salvar',
+        cancelText: 'Cancelar',
+        onConfirm: async () => {
+            const nome = content.querySelector('#categoria-nome').value.trim();
+            const permiteComposicao = content.querySelector('#categoria-permite-composicao').checked;
+
+            if (!nome) {
+                showToast('Informe o nome da categoria', 'error');
+                return;
+            }
+
+            try {
+                await api.post('/produtos/categorias', {
+                    nome,
+                    permite_composicao: permiteComposicao,
+                });
+                await loadCategorias(true);
+                closeModal();
+                showToast('Categoria criada com sucesso', 'success');
+            } catch (err) {
+                showToast(err.message || 'Erro ao criar categoria', 'error');
+            }
+        }
+    });
+
+    requestAnimationFrame(() => content.querySelector('#categoria-nome')?.focus());
+}
+
 function openProdutoModal(produto = null) {
     const isEdit = !!produto;
 
@@ -36,9 +117,7 @@ function openProdutoModal(produto = null) {
             <div class="form-group">
                 <label for="prod-categoria">Categoria</label>
                 <select id="prod-categoria" class="form-control">
-                    <option value="gesso_convencional" ${produto?.categoria === 'gesso_convencional' ? 'selected' : ''}>Gesso Convencional</option>
-                    <option value="drywall" ${produto?.categoria === 'drywall' ? 'selected' : ''}>Drywall</option>
-                    <option value="producao_propria" ${produto?.categoria === 'producao_propria' ? 'selected' : ''}>Produção Própria</option>
+                    ${renderCategoryOptions(categoriasProduto, produto?.categoria || categoriasProduto[0]?.slug || '')}
                 </select>
             </div>
             <div class="form-group">
@@ -118,7 +197,7 @@ function openProdutoModal(produto = null) {
     const composicaoEntry = content.querySelector('#product-composition-entry');
 
     const updateComposicaoVisibility = () => {
-        composicaoEntry.hidden = categoriaInput.value !== 'producao_propria';
+        composicaoEntry.hidden = !categoryAllowsComposition(categoriaInput.value, categoriasProduto);
     };
 
     const getFormData = () => ({
@@ -155,7 +234,7 @@ function openProdutoModal(produto = null) {
                 closeModal();
                 await loadProdutos();
 
-                if (!isEdit && produtoSalvo.categoria === 'producao_propria') {
+                if (!isEdit && produtoPermiteComposicao(produtoSalvo)) {
                     produtoSalvo.tem_composicao = false;
                     setTimeout(() => openComposicaoModal(produtoSalvo), 300);
                 }
@@ -389,21 +468,24 @@ export function render(container) {
     header.className = 'page-header';
     header.innerHTML = `
         <h1>Produtos</h1>
-        <button class="btn btn-primary" id="btn-novo-produto">
-            ${icons.plus()} Novo Produto
-        </button>
+        <div class="header-actions">
+            ${isAdmin() ? `
+                <button class="btn btn-secondary" id="btn-nova-categoria">
+                    ${icons.plus()} Nova Categoria
+                </button>
+            ` : ''}
+            <button class="btn btn-primary" id="btn-novo-produto">
+                ${icons.plus()} Novo Produto
+            </button>
+        </div>
     `;
     container.appendChild(header);
 
     // Category filter tabs
     const filters = document.createElement('div');
     filters.className = 'filter-tabs';
-    filters.innerHTML = `
-        <button class="btn btn-filter active" data-categoria="">Todos</button>
-        <button class="btn btn-filter" data-categoria="gesso_convencional">Gesso Convencional</button>
-        <button class="btn btn-filter" data-categoria="drywall">Drywall</button>
-        <button class="btn btn-filter" data-categoria="producao_propria">Produção Própria</button>
-    `;
+    filtersContainer = filters;
+    renderCategoriaFilters();
     container.appendChild(filters);
 
     // Table container
@@ -419,7 +501,11 @@ export function render(container) {
                 key: 'categoria',
                 label: 'Categoria',
                 sortable: true,
-                render: (val) => `<span class="badge ${getCategoriaBadge(val)}">${getCategoriaLabel(val)}</span>`
+                render: (val, produto) => `
+                    <span class="badge ${getCategoriaBadge(val)}">
+                        ${escapeHtml(productCategoryLabel(produto, categoriasProduto))}
+                    </span>
+                `
             },
             {
                 key: 'unidade',
@@ -444,7 +530,7 @@ export function render(container) {
                 label: 'Composição',
                 sortable: false,
                 render: (val, produto) => {
-                    if (produto.categoria !== 'producao_propria') return '—';
+                    if (!produtoPermiteComposicao(produto)) return '—';
                     return val
                         ? '<span class="badge badge-success">Configurada</span>'
                         : '<span class="badge badge-warning">Pendente</span>';
@@ -471,7 +557,7 @@ export function render(container) {
                 icon: icons.layers(),
                 title: 'Configurar composição',
                 onClick: (produto) => openComposicaoModal(produto),
-                show: (produto) => produto.categoria === 'producao_propria'
+                show: (produto) => produtoPermiteComposicao(produto)
             },
             {
                 icon: icons.trash2(),
@@ -486,17 +572,10 @@ export function render(container) {
         openProdutoModal();
     });
 
-    // Event: category filter
-    filters.querySelectorAll('.btn-filter').forEach(btn => {
-        btn.addEventListener('click', () => {
-            filters.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentCategoria = btn.dataset.categoria;
-            loadProdutos();
-        });
-    });
+    header.querySelector('#btn-nova-categoria')?.addEventListener('click', openCategoriaModal);
 
     // Initial load
     currentCategoria = '';
+    loadCategorias(true);
     loadProdutos();
 }

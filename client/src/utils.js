@@ -145,7 +145,14 @@ const categorias = {
   outro: 'Outro',
 };
 export function getCategoriaLabel(cat) {
-  return categorias[cat] || cat || '—';
+  if (categorias[cat]) return categorias[cat];
+  if (!cat) return '—';
+
+  return String(cat)
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 /** Unit labels */

@@ -1,27 +1,33 @@
 import { Router } from 'express';
 import db from '../database.js';
 import { requirePermission, verifyToken } from '../middleware/auth.js';
+import { categoryAllowsComposition } from '../productCategories.js';
 
 const router = Router();
 
 async function listarProdutosProducao() {
   const produtos = await db('produtos')
+    .leftJoin('produto_categorias', 'produtos.categoria', 'produto_categorias.slug')
     .select(
-      'id',
-      'codigo_interno',
-      'nome',
-      'categoria',
-      'unidade',
-      'preco_venda',
-      'estoque_minimo',
-      'ativo'
+      'produtos.id',
+      'produtos.codigo_interno',
+      'produtos.nome',
+      'produtos.categoria',
+      'produtos.unidade',
+      'produtos.preco_venda',
+      'produtos.estoque_minimo',
+      'produtos.ativo',
+      'produto_categorias.nome as categoria_nome',
+      'produto_categorias.permite_composicao as categoria_permite_composicao'
     )
-    .where({
-      categoria: 'producao_propria',
-      ativo: true,
+    .where('produtos.ativo', true)
+    .andWhere((query) => {
+      query
+        .where('produto_categorias.permite_composicao', true)
+        .orWhere('produtos.categoria', 'producao_propria');
     })
-    .orderByRaw('codigo_interno ASC NULLS LAST')
-    .orderBy('nome');
+    .orderByRaw('produtos.codigo_interno ASC NULLS LAST')
+    .orderBy('produtos.nome');
 
   if (produtos.length === 0) return [];
 
@@ -69,6 +75,7 @@ async function listarProdutosProducao() {
     return {
       ...produto,
       produto_id: produto.id,
+      categoria_permite_composicao: categoryAllowsComposition(produto),
       receita_id: receita?.id || null,
       receita_nome: receita?.nome || null,
       tem_composicao: insumos.length > 0,
