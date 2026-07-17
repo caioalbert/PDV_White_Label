@@ -55,6 +55,20 @@ export async function seed(knex) {
   await knex('configuracoes').del();
 
   await knex('produto_categorias').insert(defaultProductCategories);
+  const productCategories = await knex('produto_categorias').select('id', 'slug');
+  const productCategoryIds = new Map(productCategories.map((category) => [category.slug, category.id]));
+
+  function withCategoryId(produto) {
+    const categoriaId = productCategoryIds.get(produto.categoria);
+    if (!categoriaId) {
+      throw new Error(`Categoria inexistente no seed: ${produto.categoria}`);
+    }
+
+    return {
+      ...produto,
+      categoria_id: categoriaId,
+    };
+  }
 
   // === LOJAS ===
   const [lojaMundubim] = await knex('lojas').insert([
@@ -158,7 +172,7 @@ export async function seed(knex) {
     { nome: 'Fita Telada Drywall', categoria: 'drywall', unidade: 'unidade', preco_venda: 12 },
   ];
 
-  const todosProdutos = [...produtosProducao, ...produtosOutros];
+  const todosProdutos = [...produtosProducao, ...produtosOutros].map(withCategoryId);
   const produtosInseridos = await knex('produtos').insert(todosProdutos).returning('id');
   await Promise.all(produtosInseridos.map((produto) =>
     knex('produtos')

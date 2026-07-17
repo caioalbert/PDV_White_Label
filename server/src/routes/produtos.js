@@ -12,6 +12,22 @@ import {
 } from '../productCategories.js';
 
 const router = Router();
+const productSelectColumns = [
+  'produtos.id',
+  'produtos.nome',
+  'produtos.categoria_id',
+  'produto_categorias.slug as categoria',
+  'produto_categorias.nome as categoria_nome',
+  'produto_categorias.permite_composicao as categoria_permite_composicao',
+  'produtos.unidade',
+  'produtos.preco_venda',
+  'produtos.estoque_minimo',
+  'produtos.ativo',
+  'produtos.created_at',
+  'produtos.updated_at',
+  'produtos.codigo_interno',
+  'produtos.codigo_barras',
+];
 const unidadesValidas = new Set([
   'unidade',
   'saco',
@@ -57,17 +73,15 @@ async function findActiveCategory(slug) {
 
 async function validarCategoriaProduto(slug) {
   const category = await findActiveCategory(slug);
-  return category ? null : 'Categoria inválida';
+  return category
+    ? { category, error: null }
+    : { category: null, error: 'Categoria inválida' };
 }
 
 async function selectProductById(id) {
   return db('produtos')
-    .leftJoin('produto_categorias', 'produtos.categoria', 'produto_categorias.slug')
-    .select(
-      'produtos.*',
-      'produto_categorias.nome as categoria_nome',
-      'produto_categorias.permite_composicao as categoria_permite_composicao'
-    )
+    .leftJoin('produto_categorias', 'produtos.categoria_id', 'produto_categorias.id')
+    .select(productSelectColumns)
     .where('produtos.id', id)
     .first();
 }
@@ -76,12 +90,8 @@ async function selectProductById(id) {
 router.get('/', verifyToken, async (req, res) => {
   try {
     let query = db('produtos')
-      .leftJoin('produto_categorias', 'produtos.categoria', 'produto_categorias.slug')
-      .select(
-        'produtos.*',
-        'produto_categorias.nome as categoria_nome',
-        'produto_categorias.permite_composicao as categoria_permite_composicao'
-      )
+      .leftJoin('produto_categorias', 'produtos.categoria_id', 'produto_categorias.id')
+      .select(productSelectColumns)
       .select(
         db.raw(`
           EXISTS (
@@ -99,7 +109,7 @@ router.get('/', verifyToken, async (req, res) => {
     const { categoria, search, ativo } = req.query;
 
     if (categoria) {
-      query = query.where('produtos.categoria', categoria);
+      query = query.where('produto_categorias.slug', categoria);
     }
 
     if (search) {
@@ -325,8 +335,8 @@ router.post('/', verifyToken, requireAnyPermission('produtos', 'compras'), async
     });
     if (erroValidacao) return res.status(400).json({ error: erroValidacao });
 
-    const erroCategoria = await validarCategoriaProduto(categoria);
-    if (erroCategoria) return res.status(400).json({ error: erroCategoria });
+    const categoriaValidada = await validarCategoriaProduto(categoria);
+    if (categoriaValidada.error) return res.status(400).json({ error: categoriaValidada.error });
 
     const produtoMesmoNome = await db('produtos')
       .whereRaw('LOWER(TRIM(nome)) = LOWER(TRIM(?))', [nome])
@@ -342,7 +352,8 @@ router.post('/', verifyToken, requireAnyPermission('produtos', 'compras'), async
       const [novoProduto] = await trx('produtos')
         .insert({
           nome,
-          categoria,
+          categoria: categoriaValidada.category.slug,
+          categoria_id: categoriaValidada.category.id,
           unidade,
           preco_venda,
           estoque_minimo,
@@ -370,7 +381,8 @@ router.post('/', verifyToken, requireAnyPermission('produtos', 'compras'), async
       return novoProduto;
     });
 
-    res.status(201).json(produto);
+    const produtoCriado = await selectProductById(produto.id);
+    res.status(201).json(produtoCriado);
   } catch (err) {
     console.error('Erro ao criar produto:', err);
     if (err.code === '23505') {
@@ -400,14 +412,15 @@ router.put('/:id', verifyToken, requirePermission('produtos'), async (req, res) 
     });
     if (erroValidacao) return res.status(400).json({ error: erroValidacao });
 
-    const erroCategoria = await validarCategoriaProduto(categoria);
-    if (erroCategoria) return res.status(400).json({ error: erroCategoria });
+    const categoriaValidada = await validarCategoriaProduto(categoria);
+    if (categoriaValidada.error) return res.status(400).json({ error: categoriaValidada.error });
 
     const [produto] = await db('produtos')
       .where({ id: req.params.id })
       .update({
         nome,
-        categoria,
+        categoria: categoriaValidada.category.slug,
+        categoria_id: categoriaValidada.category.id,
         unidade,
         preco_venda,
         estoque_minimo,
@@ -418,7 +431,8 @@ router.put('/:id', verifyToken, requirePermission('produtos'), async (req, res) 
       .returning('*');
 
     if (!produto) return res.status(404).json({ error: 'Produto não encontrado' });
-    res.json(produto);
+    const produtoAtualizado = await selectProductById(produto.id);
+    res.json(produtoAtualizado);
   } catch (err) {
     console.error('Erro ao atualizar produto:', err);
     if (err.code === '23505') {

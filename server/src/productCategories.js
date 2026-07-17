@@ -16,5 +16,6 @@ export function slugifyCategoryName(value) {
 
 export function categoryAllowsComposition(product) {
   return Boolean(product?.categoria_permite_composicao)
-    || product?.categoria === 'producao_propria';
+    || product?.categoria === 'producao_propria'
+    || product?.categoria_slug === 'producao_propria';
 }

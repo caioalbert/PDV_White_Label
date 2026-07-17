@@ -7,12 +7,13 @@ const router = Router();
 
 async function listarProdutosProducao() {
   const produtos = await db('produtos')
-    .leftJoin('produto_categorias', 'produtos.categoria', 'produto_categorias.slug')
+    .leftJoin('produto_categorias', 'produtos.categoria_id', 'produto_categorias.id')
     .select(
       'produtos.id',
       'produtos.codigo_interno',
       'produtos.nome',
-      'produtos.categoria',
+      'produtos.categoria_id',
+      'produto_categorias.slug as categoria',
       'produtos.unidade',
       'produtos.preco_venda',
       'produtos.estoque_minimo',
