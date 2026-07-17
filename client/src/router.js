@@ -66,6 +66,33 @@ function updateSidebarActive(path) {
 }
 
 let routeVersion = 0;
+const CHUNK_RELOAD_KEY = 'pdv:chunk-reload-attempt';
+
+function getCurrentBundleKey() {
+  return document.querySelector('script[type="module"][src*="/assets/index-"]')?.src
+    || window.location.origin;
+}
+
+function isChunkLoadError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return message.includes('dynamically imported module')
+    || message.includes('failed to fetch dynamically imported module')
+    || message.includes('importing a module script failed')
+    || message.includes('error loading dynamically imported module');
+}
+
+function reloadAfterStaleChunk(error) {
+  if (!isChunkLoadError(error)) return false;
+
+  const attemptKey = `${getCurrentBundleKey()}:${String(error?.message || '')}`;
+  if (sessionStorage.getItem(CHUNK_RELOAD_KEY) === attemptKey) {
+    return false;
+  }
+
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, attemptKey);
+  window.location.reload();
+  return true;
+}
 
 async function handleRoute() {
   const version = ++routeVersion;
@@ -103,12 +130,23 @@ async function handleRoute() {
 
   // ---- Authentication pages (no shell) ----
   if (path === '/login' || path === '/alterar-senha') {
-    const loader = routes[path];
-    const mod = await loader();
-    if (version !== routeVersion) return;
-    const app = document.getElementById('app');
-    app.innerHTML = '<div id="auth-root"></div>';
-    await mod.render(document.getElementById('auth-root'));
+    try {
+      const loader = routes[path];
+      const mod = await loader();
+      if (version !== routeVersion) return;
+      const app = document.getElementById('app');
+      app.innerHTML = '<div id="auth-root"></div>';
+      await mod.render(document.getElementById('auth-root'));
+    } catch (err) {
+      if (reloadAfterStaleChunk(err)) return;
+      console.error('Erro ao carregar módulo:', err);
+      document.getElementById('app').innerHTML = `
+        <div class="empty-state">
+          <h4>Erro ao carregar página</h4>
+          <p>${escapeHtml(err.message)}</p>
+        </div>
+      `;
+    }
     return;
   }
 
@@ -154,6 +192,7 @@ async function handleRoute() {
     await mod.render(contentEl);
   } catch (err) {
     if (version !== routeVersion) return;
+    if (reloadAfterStaleChunk(err)) return;
     console.error('Erro ao carregar módulo:', err);
     contentEl.innerHTML = `
       <div class="empty-state">
@@ -204,6 +243,10 @@ export function navigate(path) {
 }
 
 export async function init() {
+  window.addEventListener('vite:preloadError', (event) => {
+    event.preventDefault();
+    reloadAfterStaleChunk(event.payload);
+  });
   window.addEventListener('hashchange', handleRoute);
   window.addEventListener('lojaChanged', handleRoute);
   handleRoute();
