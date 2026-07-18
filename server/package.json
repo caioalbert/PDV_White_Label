@@ -21,6 +21,7 @@
     "password:rotate": "node scripts/rotate-user-password.js",
     "users:provision-stores": "node scripts/provision-store-users.js",
     "products:import-client": "node scripts/import-client-products.js",
+    "products:backfill-categories": "node scripts/backfill-product-category-ids.js",
     "db:e2e:reset": "node scripts/reset-e2e-db.js",
     "start:e2e": "NODE_ENV=test DB_NAME=pdv_carlos_e2e PORT=3101 CORS_ORIGINS=http://127.0.0.1:5174 node index.js",
     "test": "node --test"

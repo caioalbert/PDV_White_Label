@@ -20,6 +20,7 @@
     "db:migrate:status": "npm run migrate:status --workspace=pdv-carlos-server",
     "db:migrate:rollback": "npm run migrate:rollback --workspace=pdv-carlos-server",
     "db:bootstrap-admin": "npm run bootstrap:admin --workspace=pdv-carlos-server",
-    "db:import-products": "npm run products:import-client --workspace=pdv-carlos-server"
+    "db:import-products": "npm run products:import-client --workspace=pdv-carlos-server",
+    "db:backfill-product-categories": "npm run products:backfill-categories --workspace=pdv-carlos-server"
   }
 }
