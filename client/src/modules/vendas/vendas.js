@@ -12,7 +12,6 @@ import {
   formatDate,
   formatDateTime,
   formatPhone,
-  getCategoriaLabel,
   getUnidadeLabel,
   maskInput,
 } from '../../utils.js';
@@ -469,7 +468,6 @@ function renderPdv(container) {
 
   const descontoMaximo = configNumber('desconto_maximo', 20);
   const usuario = getUser();
-  let categoria = '';
   let produtosFiltrados = [];
   let clientePainelAberto = false;
   let tipoVenda = 'varejo';
@@ -516,13 +514,6 @@ function renderPdv(container) {
           </div>
 
           <div class="pdv-customer-card" id="pdv-cliente-card"></div>
-
-          <div class="filter-tabs compact-tabs" id="pdv-categorias">
-            <button class="btn-filter active" data-categoria="">Todos</button>
-            <button class="btn-filter" data-categoria="gesso_convencional">Gesso</button>
-            <button class="btn-filter" data-categoria="drywall">Drywall</button>
-            <button class="btn-filter" data-categoria="producao_propria">Produção própria</button>
-          </div>
 
           <div class="pdv-product-list-header">
             <span>Produtos</span>
@@ -845,12 +836,20 @@ function renderPdv(container) {
     const quantidadeInput = produtosLista.querySelector(
       `[data-quantidade-produto="${produtoId}"]`
     );
-    if (!produto || !quantidadeInput) return;
+    if (!produto) {
+      showToast('Produto não encontrado. Atualize a página e tente novamente.', 'error');
+      return;
+    }
+    if (!quantidadeInput) {
+      showToast('Não foi possível identificar a quantidade do produto.', 'error');
+      return;
+    }
 
     selecionarProduto(produto.id);
     if (adicionarProduto(produto, quantidadeInput.value)) {
       quantidadeInput.value = '1';
       renderCarrinho();
+      showToast(`${produto.nome} adicionado à venda`, 'success');
       buscaInput.focus();
       buscaInput.select();
     } else {
@@ -861,10 +860,7 @@ function renderPdv(container) {
 
   function renderProdutos() {
     const termo = buscaInput.value.trim();
-    produtosFiltrados = produtos.filter((produto) =>
-      (!categoria || produto.categoria === categoria)
-      && produtoCorrespondeBusca(produto, termo)
-    );
+    produtosFiltrados = produtos.filter((produto) => produtoCorrespondeBusca(produto, termo));
 
     if (!produtosFiltrados.some((produto) => produto.id === produtoSelecionadoId)) {
       produtoSelecionadoId = produtosFiltrados[0]?.id || null;
@@ -891,7 +887,6 @@ function renderPdv(container) {
               <div class="pdv-product-name">${escapeHtml(produto.nome)}</div>
               <div class="pdv-product-info">
                 <span>${escapeHtml(produto.codigo_interno || `#${produto.id}`)}</span>
-                <span>${getCategoriaLabel(produto.categoria)}</span>
                 <span>${getUnidadeLabel(produto.unidade)}</span>
               </div>
               <div class="pdv-stock-line">
@@ -921,14 +916,17 @@ function renderPdv(container) {
                     value="1"
                     data-quantidade-produto="${produto.id}"
                     aria-label="Quantidade de ${escapeHtml(produto.nome)}"
-                    ${bloqueado ? 'disabled' : ''}
                   >
                 </label>
                 <button
                   class="btn ${bloqueado ? 'btn-secondary' : 'btn-primary'} btn-sm"
                   data-adicionar-produto="${produto.id}"
                   type="button"
-                  ${bloqueado ? 'disabled' : ''}
+                  title="${semPreco
+                    ? 'Produto sem preço cadastrado'
+                    : estado.saldo <= 0
+                      ? 'Produto sem estoque nesta loja'
+                      : 'Adicionar produto à venda'}"
                 >
                   ${icons.plus()} Adicionar
                 </button>
@@ -1005,7 +1003,7 @@ function renderPdv(container) {
             <div class="pdv-cart-item-top">
               <div>
                 <strong>${escapeHtml(item.nome)}</strong>
-                <small>${getCategoriaLabel(item.categoria)} · ${getUnidadeLabel(item.unidade)}</small>
+                <small>${getUnidadeLabel(item.unidade)}</small>
               </div>
               <button class="pdv-cart-item-remove" data-remover="${index}" title="Remover item" aria-label="Remover item">
                 ${icons.trash2()}
@@ -1207,17 +1205,6 @@ function renderPdv(container) {
 
   container.querySelector('#venda-tipo').addEventListener('change', (event) => {
     tipoVenda = event.target.value;
-  });
-
-  container.querySelectorAll('#pdv-categorias [data-categoria]').forEach((button) => {
-    button.addEventListener('click', () => {
-      container.querySelectorAll('#pdv-categorias [data-categoria]').forEach((item) => {
-        item.classList.remove('active');
-      });
-      button.classList.add('active');
-      categoria = button.dataset.categoria;
-      renderProdutos();
-    });
   });
 
   container.querySelector('#btn-mais-acoes').addEventListener('click', () => {

@@ -7,7 +7,7 @@ import {
 } from '../middleware/auth.js';
 
 const router = Router();
-const categoriasValidas = new Set(['gesso_convencional', 'drywall', 'producao_propria']);
+const categoriasValidas = new Set(['geral', 'gesso_convencional', 'drywall', 'producao_propria']);
 const unidadesValidas = new Set([
   'unidade',
   'saco',

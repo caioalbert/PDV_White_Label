@@ -147,14 +147,6 @@ async function openNovaCompraModal(compraParaEditar = null) {
                         <input type="text" id="novo-produto-nome" class="form-control">
                     </div>
                     <div class="form-group">
-                        <label for="novo-produto-categoria">Categoria *</label>
-                        <select id="novo-produto-categoria" class="form-control">
-                            <option value="gesso_convencional">Gesso Convencional</option>
-                            <option value="drywall">Drywall</option>
-                            <option value="producao_propria">Produção Própria</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
                         <label for="novo-produto-unidade">Unidade de estoque *</label>
                         <select id="novo-produto-unidade" class="form-control">
                             <option value="kg">Kg</option>
@@ -439,7 +431,7 @@ async function openNovaCompraModal(compraParaEditar = null) {
     content.querySelector('#btn-salvar-produto').addEventListener('click', async () => {
         const data = {
             nome: content.querySelector('#novo-produto-nome').value.trim(),
-            categoria: content.querySelector('#novo-produto-categoria').value,
+            categoria: 'geral',
             unidade: content.querySelector('#novo-produto-unidade').value,
             codigo_barras: content.querySelector('#novo-produto-codigo-barras').value.trim(),
             preco_venda: parseFloat(content.querySelector('#novo-produto-preco').value) || 0,
