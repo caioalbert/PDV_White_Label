@@ -4,14 +4,19 @@ import { formatCurrency, getUnidadeLabel } from '../../utils.js';
 import { openModal, closeModal } from '../../components/modal.js';
 import { createTable } from '../../components/table.js';
 import { showToast } from '../../components/toast.js';
+import { getCurrentLojaId } from '../../auth.js';
 
 let tableInstance = null;
 let allProdutos = [];
 
 async function loadProdutos() {
     try {
-        const res = await api.get('/produtos');
-        allProdutos = res.data || res;
+        const lojaId = getCurrentLojaId();
+        const res = await api.get(`/produtos${lojaId ? `?loja_id=${lojaId}` : ''}`);
+        allProdutos = (res.data || res).map((produto) => ({
+            ...produto,
+            estoque_atual: parseFloat(produto.estoque_atual) || 0
+        }));
         if (tableInstance) {
             tableInstance.update(allProdutos);
         }
@@ -174,6 +179,19 @@ export function render(container) {
                 render: (val) => parseFloat(val || 0) > 0
                     ? formatCurrency(val)
                     : '<span class="badge badge-warning">Sem preço</span>'
+            },
+            {
+                key: 'estoque_atual',
+                label: 'Estoque Atual',
+                sortable: true,
+                render: (val, row) => {
+                    const quantidade = parseFloat(val) || 0;
+                    const saldo = quantidade.toLocaleString('pt-BR', {
+                        minimumFractionDigits: Number.isInteger(quantidade) ? 0 : 2,
+                        maximumFractionDigits: 2
+                    });
+                    return `${saldo} ${getUnidadeLabel(row.unidade)}`;
+                }
             },
             {
                 key: 'estoque_minimo',

@@ -36,6 +36,15 @@ function validarProduto({ nome, categoria, unidade, preco_venda, estoque_minimo 
 // GET /api/produtos
 router.get('/', verifyToken, async (req, res) => {
   try {
+    const lojaSolicitadaId = parseInt(req.query.loja_id, 10);
+    const lojaId = req.user.perfil === 'vendedor'
+      ? req.user.loja_id
+      : Number.isInteger(lojaSolicitadaId) && lojaSolicitadaId > 0
+        ? lojaSolicitadaId
+        : null;
+    const filtroLojaEstoque = lojaId ? 'AND estoque.loja_id = ?' : '';
+    const parametrosEstoque = lojaId ? [lojaId] : [];
+
     let query = db('produtos')
       .select('produtos.*')
       .select(
@@ -48,7 +57,15 @@ router.get('/', verifyToken, async (req, res) => {
             WHERE receitas.produto_id = produtos.id
               AND receitas.ativo = true
           ) AS tem_composicao
-        `)
+        `),
+        db.raw(`
+          COALESCE((
+            SELECT SUM(estoque.quantidade)
+            FROM estoque
+            WHERE estoque.produto_id = produtos.id
+              ${filtroLojaEstoque}
+          ), 0) AS estoque_atual
+        `, parametrosEstoque)
       )
       .orderByRaw('produtos.codigo_interno ASC NULLS LAST')
       .orderBy('produtos.nome');
